@@ -75,3 +75,4 @@ export const calculateExpenseTotal = (amount: number, vat: number): number => {
   return amount + vat;
 };
 
+

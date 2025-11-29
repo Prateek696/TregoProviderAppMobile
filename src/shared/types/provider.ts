@@ -88,3 +88,4 @@ export interface ProviderAppProps {
 
 export type Screen = 'auth' | 'onboarding' | 'main' | 'setup' | 'dashboard' | 'jobs' | 'contacts' | 'calendar' | 'calendar-monthly';
 
+
