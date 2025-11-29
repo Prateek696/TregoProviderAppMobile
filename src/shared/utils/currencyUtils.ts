@@ -39,3 +39,4 @@ export const formatPrice = (price: string | number | null | undefined): string =
   return price; // Already formatted string
 };
 
+

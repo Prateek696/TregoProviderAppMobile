@@ -37,3 +37,4 @@ export type MainStackParamList = {
 // Combine all param lists for type safety
 export type AppParamList = RootStackParamList & MainTabParamList & MainStackParamList;
 
+

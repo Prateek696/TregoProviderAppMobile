@@ -88,6 +88,21 @@ export const Colors = {
   jobLongTerm: '#007AFF',
   jobRecurring: '#32D3C8',
   jobCancelled: '#8E8E93',
+  
+  // Emerald Colors (Provider Primary)
+  emerald50: '#ecfdf5',
+  emerald100: '#d1fae5',
+  emerald600: '#10b981',
+  emerald700: '#047857',
+  
+  // Gradient Background Colors
+  amber50: '#fffbeb',
+  amber100: '#fef3c7',
+  purple50: '#faf5ff',
+  purple100: '#f3e8ff',
+  pink50: '#fdf2f8',
+  pink100: '#fce7f3',
 } as const;
+
 
 
