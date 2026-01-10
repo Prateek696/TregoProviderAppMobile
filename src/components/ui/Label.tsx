@@ -26,8 +26,8 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.foreground,
-    marginBottom: 4,
+    color: '#e5e7eb', // Light text for dark theme
+    marginBottom: 8,
   },
   required: {
     color: Colors.destructive,

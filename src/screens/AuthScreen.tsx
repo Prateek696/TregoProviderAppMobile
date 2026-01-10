@@ -4,7 +4,7 @@
  * Matches design, colors, spacing, and styling exactly
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Animated,
+  Animated as RNAnimated,
   Dimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -27,6 +27,18 @@ import { Colors } from '../shared/constants/colors';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import { TregoLogo } from '../components/TregoLogo';
 import Svg, { Path } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withSequence,
+  Easing,
+  FadeIn,
+  FadeOut,
+  SlideInDown,
+  SlideOutUp,
+} from 'react-native-reanimated';
 
 type AuthScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Auth'>;
 type AuthStep = 'method' | 'email-password' | 'email-otp' | 'phone' | 'verify-otp' | 'verify-phone-otp';
@@ -45,22 +57,28 @@ export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(true);
 
   // Animated values for gradient layers
-  const gradientAnim1 = React.useRef(new Animated.Value(0)).current;
-  const gradientAnim2 = React.useRef(new Animated.Value(0)).current;
-  const gradientAnim3 = React.useRef(new Animated.Value(0)).current;
-  const gradientAnim4 = React.useRef(new Animated.Value(0)).current;
+  const gradientAnim1 = React.useRef(new RNAnimated.Value(0)).current;
+  const gradientAnim2 = React.useRef(new RNAnimated.Value(0)).current;
+  const gradientAnim3 = React.useRef(new RNAnimated.Value(0)).current;
+  const gradientAnim4 = React.useRef(new RNAnimated.Value(0)).current;
+
+  // Entry animations for content
+  const logoOpacity = useSharedValue(0);
+  const logoScale = useSharedValue(0.8);
+  const contentOpacity = useSharedValue(0);
+  const contentTranslateY = useSharedValue(20);
 
   React.useEffect(() => {
     // Animate gradient layers
-    const createAnimation = (animValue: Animated.Value, duration: number) => {
-      return Animated.loop(
-        Animated.sequence([
-          Animated.timing(animValue, {
+    const createAnimation = (animValue: RNAnimated.Value, duration: number) => {
+      return RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.timing(animValue, {
             toValue: 1,
             duration,
             useNativeDriver: false,
           }),
-          Animated.timing(animValue, {
+          RNAnimated.timing(animValue, {
             toValue: 0,
             duration,
             useNativeDriver: false,
@@ -79,6 +97,15 @@ export default function AuthScreen() {
     anim3.start();
     anim4.start();
 
+    // Entry animations
+    logoOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
+    logoScale.value = withSpring(1, { damping: 15, stiffness: 150 });
+    
+    setTimeout(() => {
+      contentOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
+      contentTranslateY.value = withSpring(0, { damping: 20, stiffness: 100 });
+    }, 200);
+
     return () => {
       anim1.stop();
       anim2.stop();
@@ -86,6 +113,17 @@ export default function AuthScreen() {
       anim4.stop();
     };
   }, []);
+
+  // Animated styles for entry animations
+  const logoAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: logoOpacity.value,
+    transform: [{ scale: logoScale.value }],
+  }));
+
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+    transform: [{ translateY: contentTranslateY.value }],
+  }));
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -97,7 +135,9 @@ export default function AuthScreen() {
         email: 'user@gmail.com',
         authMethod: 'google',
       });
-      navigation.replace('Onboarding');
+      // Check if onboarding is complete, otherwise go to Onboarding
+      const onboardingComplete = await jsonStorage.getItem<boolean>(STORAGE_KEYS.ONBOARDING_COMPLETE);
+      navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
     } catch (err) {
       setError('Failed to sign in with Google. Please try again.');
     } finally {
@@ -124,7 +164,9 @@ export default function AuthScreen() {
       } else {
         await jsonStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'mock-email-token');
         await jsonStorage.setItem(STORAGE_KEYS.PROVIDER_PROFILE, { email, authMethod: 'email' });
-        navigation.replace('Onboarding');
+        // Check if onboarding is complete, otherwise go to Onboarding
+        const onboardingComplete = await jsonStorage.getItem<boolean>(STORAGE_KEYS.ONBOARDING_COMPLETE);
+        navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
       }
     } catch (err) {
       setError(isSignUp ? 'Failed to create account' : 'Invalid email or password');
@@ -181,7 +223,9 @@ export default function AuthScreen() {
         email: email || phone,
         authMethod: authStep === 'verify-phone-otp' ? 'phone' : 'email',
       });
-      navigation.replace('Onboarding');
+      // Check if onboarding is complete, otherwise go to Onboarding
+      const onboardingComplete = await jsonStorage.getItem<boolean>(STORAGE_KEYS.ONBOARDING_COMPLETE);
+      navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
     } catch (err) {
       setError('Invalid verification code');
     } finally {
@@ -192,19 +236,23 @@ export default function AuthScreen() {
   const handleSkipPhone = async () => {
     await jsonStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'mock-token');
     await jsonStorage.setItem(STORAGE_KEYS.PROVIDER_PROFILE, { email, authMethod: 'email' });
-    navigation.replace('Onboarding');
+    // Check if onboarding is complete, otherwise go to Onboarding
+    const onboardingComplete = await jsonStorage.getItem<boolean>(STORAGE_KEYS.ONBOARDING_COMPLETE);
+    navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
   };
 
   const renderMethodSelection = () => (
     <View style={styles.methodContainer}>
-      <View style={styles.logoWrapper}>
-        <TregoLogo size="large" />
-      </View>
-      <Text style={styles.welcomeTitle}>Welcome to trego</Text>
-      <Text style={styles.welcomeSubtitle}>Sign in or create your provider account</Text>
+      <Animated.View style={[styles.logoWrapper, logoAnimatedStyle]}>
+        <TregoLogo size="large" animated breathing />
+      </Animated.View>
+      <Animated.View style={contentAnimatedStyle}>
+        <Text style={styles.welcomeTitle}>Welcome to trego</Text>
+        <Text style={styles.welcomeSubtitle}>Sign in or create your provider account</Text>
+      </Animated.View>
 
-      <View style={styles.buttonGroup}>
-        <TouchableOpacity
+      <Animated.View style={[styles.buttonGroup, contentAnimatedStyle]}>
+        <AnimatedButton
           style={[styles.authButton, styles.googleButton]}
           onPress={handleGoogleSignIn}
           disabled={isLoading}>
@@ -214,7 +262,7 @@ export default function AuthScreen() {
             <GoogleIcon />
           )}
           <Text style={styles.buttonText}>Continue with Google</Text>
-        </TouchableOpacity>
+        </AnimatedButton>
 
         <View style={styles.separatorContainer}>
           <View style={styles.separatorLine} />
@@ -222,27 +270,27 @@ export default function AuthScreen() {
           <View style={styles.separatorLine} />
         </View>
 
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.authButton, styles.outlineButton]}
           onPress={() => setAuthStep('email-password')}>
           <Text style={styles.buttonIcon}>✉</Text>
           <Text style={styles.buttonText}>Continue with Email & Password</Text>
-        </TouchableOpacity>
+        </AnimatedButton>
 
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.authButton, styles.outlineButton]}
           onPress={() => setAuthStep('email-otp')}>
           <Text style={styles.buttonIcon}>✉</Text>
           <Text style={styles.buttonText}>Continue with Email (OTP)</Text>
-        </TouchableOpacity>
+        </AnimatedButton>
 
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.authButton, styles.outlineButton]}
           onPress={() => setAuthStep('phone')}>
           <Text style={styles.buttonIcon}>📱</Text>
           <Text style={styles.buttonText}>Continue with Phone Number</Text>
-        </TouchableOpacity>
-      </View>
+        </AnimatedButton>
+      </Animated.View>
     </View>
   );
 
@@ -290,7 +338,7 @@ export default function AuthScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.submitButton, styles.emeraldButton]}
           onPress={handleEmailPasswordSubmit}
           disabled={isLoading}>
@@ -298,7 +346,7 @@ export default function AuthScreen() {
             <Text style={styles.loadingSpinnerWhite}>⟳</Text>
           ) : null}
           <Text style={styles.submitButtonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
-        </TouchableOpacity>
+        </AnimatedButton>
 
         <TouchableOpacity style={styles.switchAuth} onPress={() => setIsSignUp(!isSignUp)}>
           <Text style={styles.switchAuthText}>
@@ -339,7 +387,7 @@ export default function AuthScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.submitButton, styles.emeraldButton]}
           onPress={handleEmailOTPSubmit}
           disabled={isLoading}>
@@ -347,7 +395,7 @@ export default function AuthScreen() {
             <Text style={styles.loadingSpinnerWhite}>⟳</Text>
           ) : null}
           <Text style={styles.submitButtonText}>Send Verification Code</Text>
-        </TouchableOpacity>
+        </AnimatedButton>
       </View>
     </View>
   );
@@ -356,7 +404,7 @@ export default function AuthScreen() {
     <View style={styles.formContainer}>
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() => setAuthStep(authStep === 'phone' && email ? 'verify-otp' : 'method')}>
+        onPress={() => setAuthStep('method')}>
         <Text style={styles.backArrow}>‹</Text>
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
@@ -366,7 +414,7 @@ export default function AuthScreen() {
       </View>
       <Text style={styles.formTitle}>Add Phone Number</Text>
       <Text style={styles.formSubtitle}>
-        {email ? 'Optional - Get SMS notifications for jobs' : "We'll send you a verification code"}
+        We'll send you a verification code
       </Text>
 
       <View style={styles.form}>
@@ -389,7 +437,7 @@ export default function AuthScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.submitButton, styles.emeraldButton]}
           onPress={handlePhoneSubmit}
           disabled={isLoading}>
@@ -397,13 +445,7 @@ export default function AuthScreen() {
             <Text style={styles.loadingSpinnerWhite}>⟳</Text>
           ) : null}
           <Text style={styles.submitButtonText}>Send Verification Code</Text>
-        </TouchableOpacity>
-
-        {email && (
-          <TouchableOpacity style={styles.skipButton} onPress={handleSkipPhone}>
-            <Text style={styles.skipButtonText}>Skip for Now</Text>
-          </TouchableOpacity>
-        )}
+        </AnimatedButton>
       </View>
     </View>
   );
@@ -456,7 +498,7 @@ export default function AuthScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <AnimatedButton
           style={[styles.submitButton, styles.emeraldButton, otp.length !== 6 && styles.disabledButton]}
           onPress={handleVerifyOTP}
           disabled={isLoading || otp.length !== 6}>
@@ -466,7 +508,7 @@ export default function AuthScreen() {
             <Text style={styles.checkIcon}>✓</Text>
           )}
           <Text style={styles.submitButtonText}>Verify Code</Text>
-        </TouchableOpacity>
+        </AnimatedButton>
 
         <TouchableOpacity
           style={styles.resendButton}
@@ -479,19 +521,29 @@ export default function AuthScreen() {
   );
 
   const renderContent = () => {
-    switch (authStep) {
-      case 'email-password':
-        return renderEmailPassword();
-      case 'email-otp':
-        return renderEmailOTP();
-      case 'phone':
-        return renderPhone();
-      case 'verify-otp':
-      case 'verify-phone-otp':
-        return renderVerifyOTP();
-      default:
-        return renderMethodSelection();
-    }
+    const content = (() => {
+      switch (authStep) {
+        case 'email-password':
+          return renderEmailPassword();
+        case 'email-otp':
+          return renderEmailOTP();
+        case 'phone':
+          return renderPhone();
+        case 'verify-otp':
+        case 'verify-phone-otp':
+          return renderVerifyOTP();
+        default:
+          return renderMethodSelection();
+      }
+    })();
+
+    return (
+      <Animated.View
+        entering={FadeIn.duration(300).springify()}
+        exiting={FadeOut.duration(200)}>
+        {content}
+      </Animated.View>
+    );
   };
 
   const opacity1 = gradientAnim1.interpolate({
@@ -516,13 +568,13 @@ export default function AuthScreen() {
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.backgroundContainer}>
-        {/* Base gradient - using View with backgroundColor */}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.emerald50 }]} />
-        {/* Animated gradient layers - simplified with opacity */}
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.emerald100, opacity: opacity1 }]} />
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.amber100, opacity: opacity2 }]} />
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.purple100, opacity: opacity3 }]} />
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.pink100, opacity: opacity4 }]} />
+        {/* Light pinkish-white background - matching 2nd picture */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#fef2f2' }]} />
+        {/* Subtle animated gradient layers */}
+        <RNAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#fce7f3', opacity: opacity1 }]} />
+        <RNAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#fef3c7', opacity: opacity2 }]} />
+        <RNAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#f3e8ff', opacity: opacity3 }]} />
+        <RNAnimated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#fce7f3', opacity: opacity4 }]} />
       </View>
 
       <ScrollView
@@ -546,6 +598,42 @@ export default function AuthScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// Animated Button Component with press animation
+const AnimatedButton = React.memo(({ children, style, onPress, disabled, ...props }: any) => {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = React.useCallback(() => {
+    if (!disabled) {
+      scale.value = withSpring(0.95, { damping: 15, stiffness: 300 });
+    }
+  }, [disabled]);
+
+  const handlePressOut = React.useCallback(() => {
+    if (!disabled) {
+      scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+    }
+  }, [disabled]);
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <TouchableOpacity
+        style={style}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled}
+        activeOpacity={0.8}
+        {...props}>
+        {children}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
 
 // Google Icon Component - SVG matching web version
 const GoogleIcon = () => (
@@ -588,13 +676,13 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#1f2937', // Dark gray card - matching 2nd picture
     borderRadius: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   cardContent: {
     paddingTop: 24,
@@ -615,13 +703,13 @@ const styles = StyleSheet.create({
   welcomeTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1f2937',
+    color: '#e5e7eb', // Light gray text for dark theme
     textAlign: 'center',
     marginBottom: 8,
   },
   welcomeSubtitle: {
     fontSize: 14,
-    color: Colors.mutedForeground,
+    color: '#9ca3af', // Light muted text for dark theme
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -635,14 +723,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: '#ffffff',
+    borderColor: '#374151', // Dark border for dark theme
+    backgroundColor: '#374151', // Dark gray button background
   },
   googleButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#374151',
   },
   outlineButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#374151',
   },
   buttonIcon: {
     fontSize: 20,
@@ -650,7 +738,7 @@ const styles = StyleSheet.create({
   },
   backArrow: {
     fontSize: 16,
-    color: Colors.mutedForeground,
+    color: '#9ca3af', // Light muted text for dark theme
     marginRight: 4,
   },
   errorIcon: {
@@ -660,7 +748,7 @@ const styles = StyleSheet.create({
   },
   loadingSpinner: {
     fontSize: 20,
-    color: Colors.foreground,
+    color: '#f3f4f6', // Light color for dark theme
     marginRight: 8,
   },
   loadingSpinnerWhite: {
@@ -674,11 +762,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   iconCircleText: {
-    fontSize: 24,
+    fontSize: 32,
   },
   buttonText: {
     fontSize: 16,
-    color: Colors.foreground,
+    color: '#f3f4f6', // Light text for dark buttons
     fontWeight: '500',
   },
   separatorContainer: {
@@ -689,12 +777,13 @@ const styles = StyleSheet.create({
   separatorLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: '#4b5563', // Dark separator for dark theme
   },
   separatorText: {
     marginHorizontal: 16,
     fontSize: 12,
-    color: Colors.mutedForeground,
+    color: '#9ca3af', // Light muted text
+    backgroundColor: '#1f2937', // Match card background
   },
   formContainer: {
     gap: 16,
@@ -706,19 +795,19 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 14,
-    color: Colors.mutedForeground,
+    color: '#9ca3af', // Light muted text for dark theme
     marginLeft: 4,
   },
   formTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#e5e7eb', // Light text for dark theme
     textAlign: 'center',
     marginBottom: 8,
   },
   formSubtitle: {
     fontSize: 14,
-    color: Colors.mutedForeground,
+    color: '#9ca3af', // Light muted text
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -772,7 +861,7 @@ const styles = StyleSheet.create({
   },
   switchAuthText: {
     fontSize: 14,
-    color: Colors.emerald600,
+    color: '#10b981', // Emerald green for links
   },
   skipButton: {
     height: 48,
@@ -781,13 +870,13 @@ const styles = StyleSheet.create({
   },
   skipButtonText: {
     fontSize: 16,
-    color: Colors.foreground,
+    color: '#9ca3af', // Light muted text for dark theme
   },
   iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.emerald100,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#10b981', // Light green/teal background for phone icon (matching image)
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
@@ -796,7 +885,7 @@ const styles = StyleSheet.create({
   verifyValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#e5e7eb', // Light text for dark theme
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -814,15 +903,15 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#4b5563', // Dark border for dark theme
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#374151', // Dark background for OTP boxes
   },
   otpText: {
     fontSize: 24,
     fontWeight: '600',
-    color: Colors.foreground,
+    color: '#f3f4f6', // Light text for dark theme
     letterSpacing: 4,
   },
   hiddenInput: {
@@ -837,7 +926,7 @@ const styles = StyleSheet.create({
   },
   resendText: {
     fontSize: 14,
-    color: Colors.emerald600,
+    color: '#10b981', // Emerald green for links
   },
   footer: {
     position: 'absolute',
@@ -850,11 +939,11 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: Colors.mutedForeground,
+    color: '#9ca3af', // Light muted text for dark theme
     textAlign: 'center',
   },
   footerLink: {
-    color: Colors.emerald600,
+    color: '#10b981', // Emerald green for links
     textDecorationLine: 'underline',
   },
 });

@@ -24,7 +24,7 @@ export const Input = React.forwardRef<TextInput, InputProps>(
       <TextInput
         ref={ref}
         style={inputStyle}
-        placeholderTextColor={Colors.mutedForeground}
+        placeholderTextColor="#9ca3af" // Light muted color for dark theme
         {...props}
       />
     );
@@ -35,17 +35,17 @@ Input.displayName = 'Input';
 
 const styles = StyleSheet.create({
   input: {
-    height: 36,
+    height: 44,
     width: '100%',
     minWidth: 0,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.inputBackground,
+    borderColor: '#4b5563', // Dark border for dark theme
+    backgroundColor: '#374151', // Dark background for dark theme
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: Colors.foreground,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#f3f4f6', // Light text for dark theme
   },
   inputError: {
     borderColor: Colors.destructive,

@@ -1,6 +1,6 @@
 /**
- * Jobs List Screen
- * Migrated from web app's ProviderJobsScreenRedesigned
+ * Jobs Screen - DARK THEME - EXACT match with web version
+ * Pixel-perfect dark aesthetics, Slate palette, and refined layout
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -10,519 +10,447 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
+  Platform,
+  Dimensions,
+  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
-import { Card, CardContent } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { Colors } from '../shared/constants/colors';
-import { Job, JobStatus } from '../shared/types/job';
-import { formatScheduleDate } from '../shared/utils/dateUtils';
+import { TregoLogo } from '../components/TregoLogo';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
-import {
-  startJob,
-  markOnSite,
-  pauseJob,
-  resumeJob,
-  completeJob,
-  cancelJob,
-} from '../shared/services/jobActions';
-import { PauseJobModal, CancelJobModal, CompleteJobModal } from '../components/modals';
+import { fullWeekDemoJobs } from '../shared/data/fullWeekJobsData';
 
 type JobsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobsList'>;
 
-type FilterType = 'all' | 'pending' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled';
+type FilterType = 'week' | 'pending' | 'completed' | 'review';
 
-// Mock jobs data - in real app, load from AsyncStorage or API
-const MOCK_JOBS: Job[] = [
-  {
-    id: '1',
-    title: 'Kitchen Faucet Repair',
-    description: 'Leaky faucet needs replacement',
-    client: 'Ana Silva',
-    clientRating: 4.8,
-    location: '1.2 km away',
-    address: 'Rua das Flores, 45, Lisboa',
-    bidAmount: '€180',
-    scheduledTime: '10:00 AM',
-    scheduledDate: new Date().toISOString(),
-    estimatedDuration: '2 hours',
-    status: 'confirmed',
-    priority: 'normal',
-    category: 'Plumbing',
-    jobType: 'fixed',
-  },
-  {
-    id: '2',
-    title: 'Bathroom Renovation',
-    description: 'Complete bathroom renovation including tiling and fixtures',
-    client: 'João Santos',
-    clientRating: 4.9,
-    location: '3.5 km away',
-    address: 'Avenida da Liberdade, 100, Lisboa',
-    bidAmount: '€2,500',
-    scheduledTime: '9:00 AM',
-    scheduledDate: new Date(Date.now() + 86400000).toISOString(),
-    estimatedDuration: '2 days',
-    status: 'pending',
-    priority: 'high',
-    category: 'Renovation',
-    jobType: 'bid',
-  },
-  {
-    id: '3',
-    title: 'Electrical Panel Upgrade',
-    description: 'Upgrade electrical panel to support new appliances',
-    client: 'Maria Costa',
-    clientRating: 5.0,
-    location: '2.1 km away',
-    address: 'Rua do Comércio, 78, Porto',
-    bidAmount: '€450',
-    scheduledTime: '2:00 PM',
-    scheduledDate: new Date().toISOString(),
-    estimatedDuration: '4 hours',
-    status: 'on-site',
-    priority: 'urgent',
-    category: 'Electrical',
-    jobType: 'fixed',
-  },
-  {
-    id: '4',
-    title: 'Drain Cleaning',
-    description: 'Clogged kitchen drain needs professional cleaning',
-    client: 'Carlos Mendes',
-    clientRating: 4.7,
-    location: '5.0 km away',
-    address: 'Rua da Paz, 123, Lisboa',
-    bidAmount: '€95',
-    scheduledTime: '11:00 AM',
-    scheduledDate: new Date(Date.now() - 86400000).toISOString(),
-    estimatedDuration: '1 hour',
-    status: 'completed',
-    priority: 'normal',
-    category: 'Plumbing',
-    jobType: 'fixed',
-  },
-];
+interface Job {
+  id: string;
+  jobNumber?: string;
+  title: string;
+  description: string;
+  client: string;
+  clientRating: number;
+  location: string;
+  address: string;
+  bidAmount?: string;
+  actualPrice?: string;
+  estimatedPrice?: string;
+  scheduledTime?: string;
+  scheduledDate?: string;
+  estimatedDuration?: string;
+  status: string;
+  priority: string;
+  category: string;
+  jobType: string;
+  technician?: string;
+  timePosted?: string;
+}
+
+const { width } = Dimensions.get('window');
+
+// Dark Theme Colors
+const COLORS = {
+  background: '#0f172a',    // Slate 950
+  surface: '#1e293b',       // Slate 800
+  surfaceLight: '#334155',  // Slate 700
+  border: '#334155',        // Slate 700
+  textPrimary: '#f1f5f9',   // Slate 100
+  textSecondary: '#94a3b8', // Slate 400
+  accent: '#f97316',        // Orange 500
+  success: '#10b981',       // Emerald 500
+  danger: '#ef4444',        // Red 500
+  warning: '#f59e0b',       // Amber 500
+  info: '#3b82f6',          // Blue 500
+  purple: '#a855f7',        // Purple 500
+};
 
 export default function JobsScreen() {
   const navigation = useNavigation<JobsScreenNavigationProp>();
-  const [jobs, setJobs] = useState<Job[]>(MOCK_JOBS);
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [orbColor, setOrbColor] = useState('#1E6FF7');
-  const [showPauseModal, setShowPauseModal] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [jobs] = useState<Job[]>(fullWeekDemoJobs as Job[]);
+  const [filter, setFilter] = useState<FilterType>('week');
+  const [orbColor, setOrbColor] = useState(COLORS.accent);
+  const [selectedDayOffset, setSelectedDayOffset] = useState(0);
 
   useEffect(() => {
     loadSettings();
-    loadJobs();
   }, []);
 
   const loadSettings = async () => {
     try {
-      const color = await jsonStorage.getItem(STORAGE_KEYS.ORB_COLOR);
+      const color = await jsonStorage.getItem<string>(STORAGE_KEYS.ORB_COLOR);
       if (color) setOrbColor(color);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
   };
 
-  const loadJobs = async () => {
-    try {
-      const storedJobs = await jsonStorage.getItem<Job[]>(STORAGE_KEYS.JOBS);
-      if (storedJobs && storedJobs.length > 0) {
-        setJobs(storedJobs);
-      }
-    } catch (error) {
-      console.error('Error loading jobs:', error);
-    }
-  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   const filteredJobs = useMemo(() => {
-    return jobs.filter(job => {
-      // Status filter
-      if (filter !== 'all' && job.status !== filter) {
-        return false;
-      }
+    let filtered = jobs;
 
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        return (
-          job.title.toLowerCase().includes(query) ||
-          job.client.toLowerCase().includes(query) ||
-          job.category.toLowerCase().includes(query) ||
-          job.address.toLowerCase().includes(query)
-        );
-      }
+    if (filter === 'week') {
+      const selectedDate = new Date(today);
+      selectedDate.setDate(today.getDate() + selectedDayOffset);
+      selectedDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(selectedDate);
+      nextDay.setDate(nextDay.getDate() + 1);
 
-      return true;
-    });
-  }, [jobs, filter, searchQuery]);
-
-  const getStatusColor = (status: JobStatus): string => {
-    switch (status) {
-      case 'pending':
-        return Colors.statusPendingText;
-      case 'confirmed':
-        return Colors.statusConfirmedText;
-      case 'en-route':
-        return Colors.statusEnRouteText;
-      case 'on-site':
-        return Colors.statusOnSiteText;
-      case 'paused':
-        return Colors.statusPausedText;
-      case 'completed':
-        return Colors.statusCompletedText;
-      case 'cancelled':
-        return Colors.statusCancelledText;
-      default:
-        return Colors.mutedForeground;
+      filtered = filtered.filter(job => {
+        if (!job.scheduledDate) return false;
+        const jobDate = new Date(job.scheduledDate);
+        jobDate.setHours(0, 0, 0, 0);
+        return jobDate >= selectedDate && jobDate < nextDay;
+      });
+    } else if (filter === 'pending') {
+      filtered = filtered.filter(job => job.status === 'pending');
+    } else if (filter === 'completed') {
+      filtered = filtered.filter(job => job.status === 'completed');
+    } else if (filter === 'review') {
+      filtered = filtered.filter(job => job.status === 'completed');
     }
-  };
 
-  const getStatusBgColor = (status: JobStatus): string => {
+    return filtered.sort((a, b) => {
+      // Keep paused jobs at the top within their category or time
+      if (a.status === 'paused' && b.status !== 'paused') return -1;
+      if (a.status !== 'paused' && b.status === 'paused') return 1;
+
+      if (a.scheduledDate && b.scheduledDate) {
+        return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+      }
+      return 0;
+    });
+  }, [jobs, filter, selectedDayOffset]);
+
+  const delayedJobsCount = useMemo(() => filteredJobs.filter(job => job.status === 'delayed').length, [filteredJobs]);
+
+  const getStatusStyle = (status: string) => {
     switch (status) {
       case 'pending':
-        return Colors.statusPendingBg;
+        return { bg: '#450a0a', border: '#991b1b', text: '#fecaca' };
       case 'confirmed':
-        return Colors.statusConfirmedBg;
+        return { bg: '#172554', border: '#1e40af', text: '#bfdbfe' };
       case 'en-route':
-        return Colors.statusEnRouteBg;
+        return { bg: '#3b0764', border: '#6b21a8', text: '#e9d5ff' };
       case 'on-site':
-        return Colors.statusOnSiteBg;
+        return { bg: '#422006', border: '#854d0e', text: '#fef3c7' };
       case 'paused':
-        return Colors.statusPausedBg;
+        return { bg: '#450a0a', border: '#ef4444', text: '#fca5a5' }; // Brighter red for paused
+      case 'delayed':
+        return { bg: '#2e1065', border: '#7c3aed', text: '#ddd6fe' };
       case 'completed':
-        return Colors.statusCompletedBg;
+        return { bg: '#064e3b', border: '#059669', text: '#d1fae5' };
       case 'cancelled':
-        return Colors.statusCancelledBg;
+        return { bg: '#1f2937', border: '#374151', text: '#d1d5db' };
       default:
-        return Colors.muted;
+        return { bg: '#1f2937', border: '#374151', text: '#d1d5db' };
     }
   };
 
   const getPriorityColor = (priority: string): string => {
     switch (priority) {
-      case 'urgent':
-        return '#ef4444';
-      case 'high':
-        return '#f97316';
-      case 'medium':
-        return '#fbbf24';
-      case 'low':
-        return '#10b981';
-      default:
-        return Colors.mutedForeground;
+      case 'urgent': return COLORS.danger;
+      case 'high': return COLORS.accent;
+      case 'medium': return COLORS.warning;
+      case 'low': return COLORS.success;
+      default: return COLORS.textSecondary;
     }
   };
 
+  const formatJobDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(todayDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateOnly = new Date(date);
+    dateOnly.setHours(0, 0, 0, 0);
+
+    if (dateOnly.getTime() === todayDate.getTime()) return 'Today';
+    if (dateOnly.getTime() === tomorrow.getTime()) return 'Tomorrow';
+
+    const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]}`;
+  };
+
+  const formatWeekDay = (offset: number) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + offset);
+    const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    return {
+      letter: offset === 0 ? 'Today' : days[date.getDay()],
+      number: date.getDate(),
+    };
+  };
+
+  const getBorderColor = (status: string): string => {
+    if (status === 'paused') return COLORS.danger;
+    if (status === 'delayed') return COLORS.purple;
+    if (status === 'confirmed') return COLORS.info;
+    if (status === 'pending') return COLORS.warning;
+    return COLORS.border;
+  };
+
   const renderJobCard = (job: Job) => {
-    const statusColor = getStatusColor(job.status);
-    const statusBgColor = getStatusBgColor(job.status);
+    const statusStyle = getStatusStyle(job.status);
     const priorityColor = getPriorityColor(job.priority);
+    const isPaused = job.status === 'paused';
+    const isDelayed = job.status === 'delayed';
+    const isConfirmed = job.status === 'confirmed';
+    const isPending = job.status === 'pending';
+    const borderColor = getBorderColor(job.status);
+    const borderWidth = (isPending || isConfirmed || isDelayed || isPaused) ? 2 : 1;
 
     return (
-      <TouchableOpacity
+      <View
         key={job.id}
-        onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}>
-        <Card style={styles.jobCard}>
-          <CardContent style={styles.jobCardContent}>
-            {/* Header */}
-            <View style={styles.jobHeader}>
-              <View style={styles.jobHeaderLeft}>
-                <Badge variant="secondary" style={styles.categoryBadge}>
-                  {job.category}
-                </Badge>
-                <Text style={styles.jobTitle} numberOfLines={2}>
-                  {job.title}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.priorityDot,
-                  { backgroundColor: priorityColor },
-                ]}
-              />
-            </View>
+        style={[
+          styles.jobCard,
+          {
+            borderColor,
+            borderWidth,
+          },
+        ]}>
+        <TouchableOpacity
+          style={styles.infoButton}
+          onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}>
+          <Text style={styles.infoIcon}>ℹ️</Text>
+        </TouchableOpacity>
 
-            {/* Status and Client */}
-            <View style={styles.jobMeta}>
-              <Badge
-                variant="outline"
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor: statusBgColor,
-                    borderColor: statusColor,
-                  },
-                ]}>
-                <Text style={[styles.statusText, { color: statusColor }]}>
-                  {job.status.replace('-', ' ').toUpperCase()}
-                </Text>
-              </Badge>
-              <Text style={styles.clientText}>
-                {job.client} {job.clientRating ? `⭐ ${job.clientRating.toFixed(1)}` : ''}
+        <View style={styles.jobHeader}>
+          <View style={styles.jobHeaderTop}>
+            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
+              <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                {job.status.replace('-', ' ').toUpperCase()}
               </Text>
             </View>
+            {job.jobNumber && <Text style={styles.jobNumberText}>{job.jobNumber}</Text>}
+            <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
+          </View>
 
-            {/* Details */}
-            <View style={styles.jobDetails}>
-              {job.scheduledDate && (
-                <View style={styles.jobDetailRow}>
-                  <Text style={styles.jobDetailIcon}>🕐</Text>
-                  <Text style={styles.jobDetailText}>
-                    {formatScheduleDate(new Date(job.scheduledDate))} • {job.scheduledTime}
-                    {job.estimatedDuration && ` • ${job.estimatedDuration}`}
-                  </Text>
-                </View>
-              )}
-
-              <View style={styles.jobDetailRow}>
-                <Text style={styles.jobDetailIcon}>📍</Text>
-                <Text style={styles.jobDetailText} numberOfLines={1}>
-                  {job.location} • {job.address}
-                </Text>
-              </View>
-
-              {(job.bidAmount || job.actualPrice || job.estimatedPrice) && (
-                <View style={styles.jobDetailRow}>
-                  <Text style={styles.jobDetailIcon}>💰</Text>
-                  <Text style={styles.jobDetailText}>
-                    {job.status === 'pending' && job.jobType === 'bid' && 'Your Bid: '}
-                    {job.status === 'confirmed' && 'Confirmed: '}
-                    {job.bidAmount || job.actualPrice || job.estimatedPrice}
-                  </Text>
-                </View>
-              )}
+          <View style={styles.jobHeaderMiddle}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{job.category}</Text>
             </View>
+            <Text style={styles.jobTitle} numberOfLines={2}>
+              {job.title}
+            </Text>
+          </View>
 
-            {/* Action Buttons */}
-            <View style={styles.jobActions}>
-              {job.status === 'pending' && (
-                <>
-                  <Button
-                    title="Chat"
-                    variant="outline"
-                    size="sm"
-                    onPress={() => {
-                      // TODO: Navigate to chat
-                    }}
-                    style={styles.actionButton}
-                  />
-                  <Button
-                    title="Schedule"
-                    variant="outline"
-                    size="sm"
-                    onPress={() => {
-                      // TODO: Navigate to schedule
-                    }}
-                    style={styles.actionButton}
-                  />
-                </>
-              )}
-              {job.status === 'confirmed' && (
-                <Button
-                  title="Start Job"
-                  size="sm"
-                  onPress={async () => {
-                    const result = await startJob(job.id);
-                    if (result.success) {
-                      await loadJobs();
-                    }
-                  }}
-                  style={[styles.actionButton, { backgroundColor: orbColor }]}
-                />
-              )}
-              {job.status === 'en-route' && (
-                <Button
-                  title="Mark On Site"
-                  size="sm"
-                  onPress={async () => {
-                    const result = await markOnSite(job.id);
-                    if (result.success) {
-                      await loadJobs();
-                    }
-                  }}
-                  style={[styles.actionButton, { backgroundColor: '#10b981' }]}
-                />
-              )}
-              {job.status === 'on-site' && (
-                <>
-                  <Button
-                    title="Pause"
-                    size="sm"
-                    variant="outline"
-                    onPress={() => {
-                      setSelectedJob(job);
-                      setShowPauseModal(true);
-                    }}
-                    style={styles.actionButton}
-                  />
-                  <Button
-                    title="Complete"
-                    size="sm"
-                    onPress={() => {
-                      setSelectedJob(job);
-                      setShowCompleteModal(true);
-                    }}
-                    style={[styles.actionButton, { backgroundColor: '#10b981' }]}
-                  />
-                </>
-              )}
-              {job.status === 'paused' && (
-                <Button
-                  title="Resume"
-                  size="sm"
-                  onPress={async () => {
-                    const result = await resumeJob(job.id);
-                    if (result.success) {
-                      await loadJobs();
-                    }
-                  }}
-                  style={[styles.actionButton, { backgroundColor: '#fbbf24' }]}
-                />
-              )}
+          <View style={styles.jobClientRow}>
+            <Text style={styles.clientText}>
+              {job.technician || job.client} ⭐ {job.clientRating.toFixed(1)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.jobDetails}>
+          <Text style={styles.jobDescription}>{job.description}</Text>
+
+          {job.scheduledDate && (
+            <View style={styles.jobDetailRow}>
+              <Text style={styles.jobDetailIcon}>🕐</Text>
+              <Text style={styles.jobDetailText}>
+                {formatJobDate(job.scheduledDate)}
+                {job.scheduledTime && ` • ${job.scheduledTime}`}
+                {job.estimatedDuration && `, ${job.estimatedDuration}`}
+              </Text>
             </View>
-          </CardContent>
-        </Card>
-      </TouchableOpacity>
+          )}
+
+          <View style={styles.jobDetailRow}>
+            <Text style={styles.jobDetailIcon}>📍</Text>
+            <Text style={styles.jobDetailText} numberOfLines={1}>
+              {job.location} • {job.address}
+            </Text>
+          </View>
+
+          {(job.bidAmount || job.actualPrice || job.estimatedPrice) && (
+            <View style={styles.jobDetailRow}>
+              <Text style={styles.jobDetailIcon}>💰</Text>
+              <Text style={styles.jobDetailText}>
+                {job.bidAmount || job.actualPrice || job.estimatedPrice}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.jobActions}>
+          {isPaused && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
+                <Text style={styles.actionButtonTextPrimary}>✓ Resume</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonOutline}>
+                <Text style={styles.actionButtonText}>📅 Reschedule</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {isDelayed && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.actionButtonOutline}>
+                <Text style={styles.actionButtonText}>💬 Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonOutline}>
+                <Text style={styles.actionButtonText}>📅 Reschedule</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
+                <Text style={styles.actionButtonTextPrimary}>+ Expense</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {isPending && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.actionButtonOutline}>
+                <Text style={styles.actionButtonText}>💬 Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonOutline}>
+                <Text style={styles.actionButtonText}>📅 Schedule</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
+                <Text style={styles.actionButtonTextPrimary}>+ Expense</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {isConfirmed && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.actionButtonOutline}>
+                <Text style={styles.actionButtonText}>💬 Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
+                <Text style={styles.actionButtonTextPrimary}>+ Expense</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
+                <Text style={styles.actionButtonTextPrimary}>Start Job</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {job.status === 'completed' && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.actionButtonOutline}>
+                <Text style={styles.actionButtonText}>➕ Expense</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
+                <Text style={styles.actionButtonTextPrimary}>📄 Invoice</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
     );
   };
 
-  const filters: { label: string; value: FilterType }[] = [
-    { label: 'All', value: 'all' },
-    { label: 'Pending', value: 'pending' },
-    { label: 'Confirmed', value: 'confirmed' },
-    { label: 'In Progress', value: 'in-progress' },
-    { label: 'Completed', value: 'completed' },
-    { label: 'Cancelled', value: 'cancelled' },
-  ];
+  const firstDelayedIndex = filteredJobs.findIndex(job => job.status === 'delayed');
 
   return (
     <View style={styles.screen}>
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search jobs..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor={Colors.mutedForeground}
-        />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+
+      <View style={styles.topBar}>
+        <View style={styles.topBarLeft}>
+          <TregoLogo size="md" />
+          <Text style={styles.topBarTitle}>Jobs</Text>
+        </View>
+        <View style={styles.topBarRight}>
+          <TouchableOpacity style={styles.notificationButton}>
+            <Text style={styles.notificationIcon}>🔔</Text>
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>1</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addButton}>
+            <Text style={styles.addIcon}>➕</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Filters */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersContainer}
-        contentContainerStyle={styles.filtersContent}>
-        {filters.map(filterOption => (
-          <TouchableOpacity
-            key={filterOption.value}
-            style={[
-              styles.filterButton,
-              filter === filterOption.value && {
-                backgroundColor: orbColor,
-                borderColor: orbColor,
-              },
-            ]}
-            onPress={() => setFilter(filterOption.value)}>
-            <Text
-              style={[
-                styles.filterText,
-                filter === filterOption.value && { color: Colors.primaryForeground },
-              ]}>
-              {filterOption.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, filter === 'week' && { backgroundColor: `${orbColor}33` }]}
+          onPress={() => setFilter('week')}>
+          <Text style={[styles.tabText, filter === 'week' && { color: orbColor, fontWeight: '600' }]}>Week</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, filter === 'pending' && { backgroundColor: `${orbColor}33` }]}
+          onPress={() => setFilter('pending')}>
+          <Text style={[styles.tabText, filter === 'pending' && { color: orbColor, fontWeight: '600' }]}>Pending</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, filter === 'completed' && { backgroundColor: `${orbColor}33` }]}
+          onPress={() => setFilter('completed')}>
+          <Text style={[styles.tabText, filter === 'completed' && { color: orbColor, fontWeight: '600' }]}>Completed</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, filter === 'review' && { backgroundColor: `${orbColor}33` }]}
+          onPress={() => setFilter('review')}>
+          <Text style={[styles.tabText, filter === 'review' && { color: orbColor, fontWeight: '600' }]}>Review</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Jobs List */}
-      <ScrollView
-        style={styles.jobsList}
-        contentContainerStyle={styles.jobsListContent}>
+      {filter === 'week' && (
+        <View style={styles.weekNavigation}>
+          {Array.from({ length: 7 }, (_, i) => {
+            const dayInfo = formatWeekDay(i);
+            const isSelected = selectedDayOffset === i;
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[styles.weekDayButton, isSelected && { backgroundColor: orbColor }]}
+                onPress={() => setSelectedDayOffset(i)}>
+                <Text style={[styles.weekDayLabel, isSelected && { color: '#ffffff', opacity: 0.7 }]}>
+                  {dayInfo.letter}
+                </Text>
+                <Text style={[styles.weekDayNumber, isSelected && { color: '#ffffff', fontWeight: '600' }]}>
+                  {dayInfo.number}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      <ScrollView style={styles.jobsList} contentContainerStyle={styles.jobsListContent} showsVerticalScrollIndicator={false}>
+        {/* Paused jobs section removed as they are now merged in main list per user request */}
+
+        {filter === 'week' && firstDelayedIndex !== -1 && (
+          <View style={styles.delayedSeparator}>
+            <View style={styles.delayedSeparatorLine} />
+            <View style={styles.delayedSeparatorBadge}>
+              <Text style={styles.delayedSeparatorIcon}>⚠️</Text>
+              <Text style={styles.delayedSeparatorText}>JOBS NEEDING FOLLOW-UP</Text>
+            </View>
+            <View style={styles.delayedSeparatorLine} />
+          </View>
+        )}
+
         {filteredJobs.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>💼</Text>
             <Text style={styles.emptyStateText}>No jobs found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {searchQuery
-                ? 'Try adjusting your search'
-                : 'Jobs will appear here when available'}
-            </Text>
           </View>
         ) : (
           filteredJobs.map(job => renderJobCard(job))
         )}
       </ScrollView>
 
-      {/* Modals */}
-      <PauseJobModal
-        visible={showPauseModal}
-        onClose={() => {
-          setShowPauseModal(false);
-          setSelectedJob(null);
-        }}
-        onConfirm={async (reason) => {
-          if (selectedJob) {
-            const result = await pauseJob(selectedJob.id, reason);
-            if (result.success) {
-              await loadJobs();
-            }
-          }
-          setShowPauseModal(false);
-          setSelectedJob(null);
-        }}
-        jobTitle={selectedJob?.title}
-      />
+      {delayedJobsCount > 0 && (
+        <View style={styles.bottomActionBar}>
+          <TouchableOpacity style={styles.followUpButton}>
+            <Text style={styles.followUpIcon}>⚠️</Text>
+            <Text style={styles.followUpText}>JOBS NEEDING FOLLOW-UP</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      <CancelJobModal
-        visible={showCancelModal}
-        onClose={() => {
-          setShowCancelModal(false);
-          setSelectedJob(null);
-        }}
-        onConfirm={async (reason) => {
-          if (selectedJob) {
-            const result = await cancelJob(selectedJob.id, reason);
-            if (result.success) {
-              await loadJobs();
-            }
-          }
-          setShowCancelModal(false);
-          setSelectedJob(null);
-        }}
-        jobTitle={selectedJob?.title}
-      />
-
-      <CompleteJobModal
-        visible={showCompleteModal}
-        onClose={() => {
-          setShowCompleteModal(false);
-          setSelectedJob(null);
-        }}
-        onConfirm={async (finalPrice) => {
-          if (selectedJob) {
-            const result = await completeJob(selectedJob.id, finalPrice);
-            if (result.success) {
-              await loadJobs();
-            }
-          }
-          setShowCompleteModal(false);
-          setSelectedJob(null);
-        }}
-        jobTitle={selectedJob?.title}
-        estimatedPrice={selectedJob?.bidAmount || selectedJob?.estimatedPrice}
-      />
+      <TouchableOpacity style={[styles.floatingAddButton, { backgroundColor: orbColor }]}>
+        <Text style={styles.floatingAddIcon}>➕</Text>
+        <Text style={styles.floatingAddText}>Add Job</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -530,103 +458,212 @@ export default function JobsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: COLORS.background,
   },
-  searchContainer: {
-    padding: 16,
-    paddingBottom: 8,
-  },
-  searchInput: {
-    height: 40,
-    backgroundColor: Colors.inputBackground,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: Colors.foreground,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  filtersContainer: {
-    maxHeight: 50,
-    marginBottom: 8,
-  },
-  filtersContent: {
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingHorizontal: 16,
-    gap: 8,
+    paddingBottom: 12,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+  topBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  filterText: {
-    fontSize: 12,
+  topBarTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  notificationIcon: {
+    fontSize: 20,
+    color: COLORS.textPrimary,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: COLORS.danger,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  addButton: {
+    padding: 8,
+  },
+  addIcon: {
+    fontSize: 20,
+    color: COLORS.textPrimary,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#1e293b', // Darker background for tabs
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabText: {
+    fontSize: 11,
     fontWeight: '500',
-    color: Colors.foreground,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  weekNavigation: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 6,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  weekDayButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  weekDayLabel: {
+    fontSize: 9,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  weekDayNumber: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
   },
   jobsList: {
     flex: 1,
   },
   jobsListContent: {
-    padding: 16,
-    gap: 12,
+    paddingBottom: 100,
   },
   jobCard: {
-    marginBottom: 0,
-  },
-  jobCardContent: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginHorizontal: 16,
+    marginTop: 12,
     padding: 16,
-    gap: 12,
+    position: 'relative',
+  },
+  infoButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 4,
+    zIndex: 10,
+  },
+  infoIcon: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
   },
   jobHeader: {
+    marginBottom: 12,
+  },
+  jobHeaderTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 8,
   },
-  jobHeaderLeft: {
-    flex: 1,
-    gap: 8,
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
   },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-  },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.foreground,
-    marginTop: 4,
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   priorityDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginTop: 4,
+    marginLeft: 'auto',
   },
-  jobMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  statusText: {
-    fontSize: 10,
+  jobNumberText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: COLORS.textSecondary,
     fontWeight: '600',
   },
+  jobHeaderMiddle: {
+    gap: 6,
+  },
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.surfaceLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  categoryText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  jobTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  jobClientRow: {
+    marginTop: 6,
+  },
   clientText: {
-    fontSize: 12,
-    color: Colors.mutedForeground,
+    fontSize: 13,
+    color: COLORS.textSecondary,
   },
   jobDetails: {
     gap: 8,
-    marginTop: 4,
+    marginBottom: 12,
+  },
+  jobDescription: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
   },
   jobDetailRow: {
     flexDirection: 'row',
@@ -637,38 +674,142 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   jobDetailText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
     flex: 1,
-    fontSize: 12,
-    color: Colors.foreground,
   },
   jobActions: {
+    marginTop: 12,
+  },
+  actionRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 8,
   },
   actionButton: {
     flex: 1,
-    marginBottom: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonOutline: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  actionButtonTextPrimary: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  delayedSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginVertical: 16,
+    gap: 12,
+  },
+  delayedSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.purple,
+    opacity: 0.3,
+  },
+  delayedSeparatorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2e1065',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.purple,
+  },
+  delayedSeparatorIcon: {
+    fontSize: 14,
+  },
+  delayedSeparatorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ddd6fe',
+    letterSpacing: 0.5,
   },
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 64,
+    justifyContent: 'center',
+    paddingVertical: 60,
   },
   emptyStateIcon: {
     fontSize: 48,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.foreground,
-    marginBottom: 8,
+    fontSize: 16,
+    color: COLORS.textSecondary,
   },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: Colors.mutedForeground,
-    textAlign: 'center',
+  bottomActionBar: {
+    position: 'absolute',
+    bottom: 80,
+    left: 16,
+    right: 16,
+  },
+  followUpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2e1065',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.purple,
+  },
+  followUpIcon: {
+    fontSize: 16,
+  },
+  followUpText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ddd6fe',
+    letterSpacing: 0.5,
+  },
+  floatingAddButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingAddIcon: {
+    fontSize: 18,
+    color: '#ffffff',
+  },
+  floatingAddText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

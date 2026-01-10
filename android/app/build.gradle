@@ -82,8 +82,8 @@ android {
         applicationId "com.tregoproviderapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "1.2"
     }
     signingConfigs {
         debug {
@@ -96,6 +96,10 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // Enable cleartext traffic for development (Metro bundler)
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
+            // Ensure JS bundle is included in debug APK
+            // React Native 0.60+ automatically bundles JS for debug builds
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
@@ -103,6 +107,21 @@ android {
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
+        }
+    }
+    
+    // Ensure assets directory exists for bundle
+    applicationVariants.all { variant ->
+        variant.outputs.each { output ->
+            def outputFile = output.outputFile
+            if (outputFile != null && outputFile.name.endsWith('.apk')) {
+                // This ensures bundle is generated before APK packaging
+                def bundleTask = tasks.findByName("bundle${variant.name.capitalize()}JsAndAssets")
+                if (bundleTask != null) {
+                    output.processResources.dependsOn(bundleTask)
+                }
+            }
         }
     }
 }

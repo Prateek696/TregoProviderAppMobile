@@ -1,10 +1,12 @@
 /**
  * Main Navigator - Handles bottom tabs and main app screens
+ * Icons match web version using MaterialCommunityIcons
  */
 
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { MainTabParamList, MainStackParamList } from './types';
 
 // Screens
@@ -46,26 +48,64 @@ function JobsStack() {
 }
 
 /**
- * Bottom Tab Navigator
+ * Bottom Tab Navigator - Icons matching web version style
+ * Web uses: MessageSquare, ClipboardList, CalendarDays, Wallet, UserCircle (lucide-react)
+ * Mobile uses MaterialCommunityIcons equivalents:
+ * - Chat: message-text (matches MessageSquare)
+ * - Jobs: clipboard-text (matches ClipboardList)  
+ * - Schedule: calendar (matches CalendarDays)
+ * - Billing: wallet (matches Wallet)
+ * - Profile: account-circle (matches UserCircle)
  */
 function TabNavigator() {
   return (
     <Tab.Navigator
-      initialRouteName="Jobs"
+      initialRouteName="Chat"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1E6FF7',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: '#3b82f6', // Web version blue #3b82f6
+        tabBarInactiveTintColor: '#6b7280', // Web version gray
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
         tabBarStyle: {
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
+          backgroundColor: '#ffffff',
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
         },
       }}>
+      <Tab.Screen
+        name="Chat"
+        component={ChatListScreen}
+        options={{
+          tabBarLabel: 'Messages',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name="message-text" 
+              size={size || 24} 
+              color={color}
+              style={{ marginTop: 4 }}
+            />
+          ),
+        }}
+      />
       <Tab.Screen
         name="Jobs"
         component={JobsStack}
         options={{
           tabBarLabel: 'Jobs',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name="clipboard-text" 
+              size={size || 24} 
+              color={color}
+              style={{ marginTop: 4 }}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -73,13 +113,14 @@ function TabNavigator() {
         component={ScheduleScreen}
         options={{
           tabBarLabel: 'Schedule',
-        }}
-      />
-      <Tab.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{
-          tabBarLabel: 'Chat',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name="calendar" 
+              size={size || 24} 
+              color={color}
+              style={{ marginTop: 4 }}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -87,6 +128,14 @@ function TabNavigator() {
         component={BillingScreen}
         options={{
           tabBarLabel: 'Billing',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name="wallet" 
+              size={size || 24} 
+              color={color}
+              style={{ marginTop: 4 }}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -94,6 +143,14 @@ function TabNavigator() {
         component={SettingsScreen}
         options={{
           tabBarLabel: 'Profile',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name="account-circle" 
+              size={size || 24} 
+              color={color}
+              style={{ marginTop: 4 }}
+            />
+          ),
         }}
       />
     </Tab.Navigator>
@@ -115,7 +172,7 @@ export default function MainNavigator() {
       <Stack.Screen name="Calendar" component={CalendarScreen} />
       <Stack.Screen name="Earnings" component={EarningsScreen} />
       <Stack.Screen name="ChatList" component={ChatListScreen} />
+      <Stack.Screen name="ChatDetail" component={ChatScreen} />
     </Stack.Navigator>
   );
 }
-

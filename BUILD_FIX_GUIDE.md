@@ -39,3 +39,10 @@ reactNativeArchitectures=arm64-v8a
 
 This will only build for 64-bit ARM (most modern phones), avoiding the problematic armeabi-v7a build.
 
+
+
+
+
+
+
+
