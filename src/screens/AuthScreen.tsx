@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {
   View,
   Text,
@@ -15,6 +16,7 @@ import {
   Platform,
   Animated as RNAnimated,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -100,7 +102,7 @@ export default function AuthScreen() {
     // Entry animations
     logoOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) });
     logoScale.value = withSpring(1, { damping: 15, stiffness: 150 });
-    
+
     setTimeout(() => {
       contentOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) });
       contentTranslateY.value = withSpring(0, { damping: 20, stiffness: 100 });
@@ -257,7 +259,7 @@ export default function AuthScreen() {
           onPress={handleGoogleSignIn}
           disabled={isLoading}>
           {isLoading ? (
-            <Text style={styles.loadingSpinner}>⟳</Text>
+            <ActivityIndicator size="small" color="#f3f4f6" style={styles.spinner} />
           ) : (
             <GoogleIcon />
           )}
@@ -273,21 +275,21 @@ export default function AuthScreen() {
         <AnimatedButton
           style={[styles.authButton, styles.outlineButton]}
           onPress={() => setAuthStep('email-password')}>
-          <Text style={styles.buttonIcon}>✉</Text>
+          <Icon name="email-outline" size={20} color="#f3f4f6" style={styles.buttonIcon} />
           <Text style={styles.buttonText}>Continue with Email & Password</Text>
         </AnimatedButton>
 
         <AnimatedButton
           style={[styles.authButton, styles.outlineButton]}
           onPress={() => setAuthStep('email-otp')}>
-          <Text style={styles.buttonIcon}>✉</Text>
+          <Icon name="email-outline" size={20} color="#f3f4f6" style={styles.buttonIcon} />
           <Text style={styles.buttonText}>Continue with Email (OTP)</Text>
         </AnimatedButton>
 
         <AnimatedButton
           style={[styles.authButton, styles.outlineButton]}
           onPress={() => setAuthStep('phone')}>
-          <Text style={styles.buttonIcon}>📱</Text>
+          <Icon name="cellphone" size={20} color="#f3f4f6" style={styles.buttonIcon} />
           <Text style={styles.buttonText}>Continue with Phone Number</Text>
         </AnimatedButton>
       </Animated.View>
@@ -297,7 +299,7 @@ export default function AuthScreen() {
   const renderEmailPassword = () => (
     <View style={styles.formContainer}>
       <TouchableOpacity style={styles.backButton} onPress={() => setAuthStep('method')}>
-        <Text style={styles.backArrow}>‹</Text>
+        <Icon name="chevron-left" size={24} color="#9ca3af" />
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
 
@@ -333,7 +335,7 @@ export default function AuthScreen() {
 
         {error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>⚠</Text>
+            <Icon name="alert-circle-outline" size={20} color={Colors.destructive} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -343,7 +345,7 @@ export default function AuthScreen() {
           onPress={handleEmailPasswordSubmit}
           disabled={isLoading}>
           {isLoading ? (
-            <Text style={styles.loadingSpinnerWhite}>⟳</Text>
+            <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
           ) : null}
           <Text style={styles.submitButtonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
         </AnimatedButton>
@@ -360,7 +362,7 @@ export default function AuthScreen() {
   const renderEmailOTP = () => (
     <View style={styles.formContainer}>
       <TouchableOpacity style={styles.backButton} onPress={() => setAuthStep('method')}>
-        <Text style={styles.backArrow}>‹</Text>
+        <Icon name="chevron-left" size={24} color="#9ca3af" />
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
 
@@ -382,7 +384,7 @@ export default function AuthScreen() {
 
         {error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>⚠</Text>
+            <Icon name="alert-circle-outline" size={20} color={Colors.destructive} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -392,7 +394,7 @@ export default function AuthScreen() {
           onPress={handleEmailOTPSubmit}
           disabled={isLoading}>
           {isLoading ? (
-            <Text style={styles.loadingSpinnerWhite}>⟳</Text>
+            <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
           ) : null}
           <Text style={styles.submitButtonText}>Send Verification Code</Text>
         </AnimatedButton>
@@ -405,12 +407,12 @@ export default function AuthScreen() {
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => setAuthStep('method')}>
-        <Text style={styles.backArrow}>‹</Text>
+        <Icon name="chevron-left" size={24} color="#9ca3af" />
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
 
       <View style={styles.iconCircle}>
-        <Text style={styles.iconCircleText}>📱</Text>
+        <Icon name="cellphone" size={32} color="#ffffff" />
       </View>
       <Text style={styles.formTitle}>Add Phone Number</Text>
       <Text style={styles.formSubtitle}>
@@ -432,7 +434,7 @@ export default function AuthScreen() {
 
         {error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>⚠</Text>
+            <Icon name="alert-circle-outline" size={20} color={Colors.destructive} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -442,7 +444,7 @@ export default function AuthScreen() {
           onPress={handlePhoneSubmit}
           disabled={isLoading}>
           {isLoading ? (
-            <Text style={styles.loadingSpinnerWhite}>⟳</Text>
+            <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
           ) : null}
           <Text style={styles.submitButtonText}>Send Verification Code</Text>
         </AnimatedButton>
@@ -458,14 +460,12 @@ export default function AuthScreen() {
           setAuthStep(authStep === 'verify-phone-otp' ? 'phone' : 'email-otp');
           setOtp('');
         }}>
-        <Text style={styles.backArrow}>‹</Text>
+        <Icon name="chevron-left" size={24} color="#9ca3af" />
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
 
       <View style={styles.iconCircle}>
-        <Text style={styles.iconCircleText}>
-          {authStep === 'verify-phone-otp' ? '📱' : '✉'}
-        </Text>
+        <Icon name={authStep === 'verify-phone-otp' ? "cellphone" : "email-outline"} size={32} color="#ffffff" />
       </View>
       <Text style={styles.formTitle}>Verify Your {authStep === 'verify-phone-otp' ? 'Phone' : 'Email'}</Text>
       <Text style={styles.formSubtitle}>Enter the 6-digit code sent to</Text>
@@ -493,7 +493,7 @@ export default function AuthScreen() {
 
         {error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>⚠</Text>
+            <Icon name="alert-circle-outline" size={20} color={Colors.destructive} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -503,9 +503,9 @@ export default function AuthScreen() {
           onPress={handleVerifyOTP}
           disabled={isLoading || otp.length !== 6}>
           {isLoading ? (
-            <Text style={styles.loadingSpinnerWhite}>⟳</Text>
+            <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
           ) : (
-            <Text style={styles.checkIcon}>✓</Text>
+            <Icon name="check" size={20} color="#ffffff" style={styles.buttonIcon} />
           )}
           <Text style={styles.submitButtonText}>Verify Code</Text>
         </AnimatedButton>
@@ -733,12 +733,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#374151',
   },
   buttonIcon: {
-    fontSize: 20,
+    marginRight: 8,
+  },
+  spinner: {
     marginRight: 8,
   },
   backArrow: {
-    fontSize: 16,
-    color: '#9ca3af', // Light muted text for dark theme
     marginRight: 4,
   },
   errorIcon: {

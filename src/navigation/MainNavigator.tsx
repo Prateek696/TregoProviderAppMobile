@@ -16,6 +16,7 @@ import ScheduleScreen from '../screens/ScheduleScreen';
 import ChatScreen from '../screens/ChatScreen';
 import BillingScreen from '../screens/BillingScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ProfileCompletionScreen from '../screens/ProfileCompletionScreen';
 
 // Placeholder screens for navigation
 import JobDetailScreen from '../screens/JobDetailScreen';
@@ -33,13 +34,13 @@ const Stack = createNativeStackNavigator<MainStackParamList>();
 function JobsStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen 
-        name="JobsList" 
+      <Stack.Screen
+        name="JobsList"
         component={JobsScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="JobDetail" 
+      <Stack.Screen
+        name="JobDetail"
         component={JobDetailScreen}
         options={{ title: 'Job Details' }}
       />
@@ -64,15 +65,15 @@ function TabNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#3b82f6', // Web version blue #3b82f6
-        tabBarInactiveTintColor: '#6b7280', // Web version gray
+        tabBarInactiveTintColor: '#94a3b8', // Slate 400 for Dark Mode
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
         },
         tabBarStyle: {
           borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          backgroundColor: '#ffffff',
+          borderTopColor: '#334155', // Slate 700
+          backgroundColor: '#1e293b', // Slate 800
           height: 60,
           paddingBottom: 8,
           paddingTop: 8,
@@ -84,9 +85,9 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Messages',
           tabBarIcon: ({ color, size, focused }) => (
-            <Icon 
-              name="message-text" 
-              size={size || 24} 
+            <Icon
+              name="message-text"
+              size={size || 24}
               color={color}
               style={{ marginTop: 4 }}
             />
@@ -99,9 +100,9 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Jobs',
           tabBarIcon: ({ color, size, focused }) => (
-            <Icon 
-              name="clipboard-text" 
-              size={size || 24} 
+            <Icon
+              name="clipboard-text"
+              size={size || 24}
               color={color}
               style={{ marginTop: 4 }}
             />
@@ -114,9 +115,9 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Schedule',
           tabBarIcon: ({ color, size, focused }) => (
-            <Icon 
-              name="calendar" 
-              size={size || 24} 
+            <Icon
+              name="calendar"
+              size={size || 24}
               color={color}
               style={{ marginTop: 4 }}
             />
@@ -129,9 +130,9 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Billing',
           tabBarIcon: ({ color, size, focused }) => (
-            <Icon 
-              name="wallet" 
-              size={size || 24} 
+            <Icon
+              name="wallet"
+              size={size || 24}
               color={color}
               style={{ marginTop: 4 }}
             />
@@ -144,9 +145,9 @@ function TabNavigator() {
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size, focused }) => (
-            <Icon 
-              name="account-circle" 
-              size={size || 24} 
+            <Icon
+              name="account-circle"
+              size={size || 24}
               color={color}
               style={{ marginTop: 4 }}
             />
@@ -173,6 +174,7 @@ export default function MainNavigator() {
       <Stack.Screen name="Earnings" component={EarningsScreen} />
       <Stack.Screen name="ChatList" component={ChatListScreen} />
       <Stack.Screen name="ChatDetail" component={ChatScreen} />
+      <Stack.Screen name="ProfileCompletion" component={ProfileCompletionScreen} />
     </Stack.Navigator>
   );
 }

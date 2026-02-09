@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { MainStackParamList } from '../navigation/types';
 import { StartupOrb } from '../components/StartupOrb';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
@@ -50,7 +51,7 @@ export default function ChatListScreen() {
   useEffect(() => {
     // Load user preferences
     const loadUserData = async () => {
-      const profile = await jsonStorage.getItem(STORAGE_KEYS.PROVIDER_PROFILE);
+      const profile = await jsonStorage.getItem<any>(STORAGE_KEYS.PROVIDER_PROFILE);
       if (profile) {
         setAssistantName(profile.assistantName || 'Bolt');
         setOrbColor(profile.orbColor || '#3b82f6');
@@ -281,20 +282,20 @@ export default function ChatListScreen() {
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.notificationButton}>
-            <Text style={styles.notificationIcon}>🔔</Text>
+            <Icon name="bell-outline" size={24} color="#f3f4f6" />
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationBadgeText}>1</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.plusButton}>
-            <Text style={styles.plusIcon}>➕</Text>
+            <Icon name="plus" size={24} color="#f3f4f6" />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Icon name="magnify" size={20} color="#9ca3af" />
         <TextInput
           style={styles.searchInput}
           placeholder="Search messages..."
@@ -340,11 +341,11 @@ export default function ChatListScreen() {
             {/* Chat Content */}
             <View style={styles.chatContent}>
               <View style={styles.chatHeader}>
-                <Text 
+                <Text
                   style={[
                     styles.chatName,
                     chat.isSupport && styles.chatNameSupport,
-                  ]} 
+                  ]}
                   numberOfLines={1}>
                   {chat.name}
                 </Text>

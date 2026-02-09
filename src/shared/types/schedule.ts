@@ -4,15 +4,15 @@
  */
 
 export type ScheduleItemType = 'wake-up' | 'job' | 'break' | 'travel' | 'end-day';
-export type ScheduleStatus = 
-  | 'pending' 
-  | 'confirmed' 
-  | 'en_route' 
-  | 'on_site' 
-  | 'paused' 
-  | 'delayed' 
-  | 'completed' 
-  | 'cancelled' 
+export type ScheduleStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'en_route'
+  | 'on_site'
+  | 'paused'
+  | 'delayed'
+  | 'completed'
+  | 'cancelled'
   | 'rescheduled';
 
 export interface ScheduleItem {
@@ -45,10 +45,10 @@ export interface ScheduleItem {
 
 export interface ScheduleBlock {
   id: string;
-  type: 'job' | 'break' | 'travel' | 'free-time';
+  type: 'job' | 'break' | 'travel' | 'free-time' | 'wake-up' | 'end-day';
   title: string;
   date: string;
-  startTime: string;
+  time: string;
   endTime: string;
   duration: number;
   description?: string;

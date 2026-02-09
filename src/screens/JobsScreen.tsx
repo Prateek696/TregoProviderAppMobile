@@ -14,12 +14,14 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
 import { TregoLogo } from '../components/TregoLogo';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import { fullWeekDemoJobs } from '../shared/data/fullWeekJobsData';
+import AddJobModal from '../components/AddJobModal';
 
 type JobsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobsList'>;
 
@@ -68,10 +70,36 @@ const COLORS = {
 
 export default function JobsScreen() {
   const navigation = useNavigation<JobsScreenNavigationProp>();
-  const [jobs] = useState<Job[]>(fullWeekDemoJobs as Job[]);
+  const [jobs, setJobs] = useState<Job[]>(fullWeekDemoJobs as Job[]);
   const [filter, setFilter] = useState<FilterType>('week');
   const [orbColor, setOrbColor] = useState(COLORS.accent);
   const [selectedDayOffset, setSelectedDayOffset] = useState(0);
+  const [isAddJobModalVisible, setIsAddJobModalVisible] = useState(false);
+
+  const handleJobCreated = (newJob: any) => {
+    // Convert modal job format to internal Job format if necessary
+    // For now, we will add it to the filtered list logic by updating the main jobs state
+    // Ensure IDs don't conflict
+    const mappedJob: Job = {
+      id: newJob.id,
+      title: newJob.description,
+      description: newJob.notes || newJob.description,
+      client: newJob.client.firstName + ' ' + newJob.client.lastName,
+      clientRating: 5.0, // Default for new
+      location: 'Lisbon, Portugal', // Default
+      address: newJob.client.address || 'No address',
+      status: 'confirmed',
+      priority: 'medium',
+      category: newJob.jobType,
+      jobType: newJob.jobType,
+      scheduledDate: newJob.date, // "YYYY-MM-DD"
+      scheduledTime: newJob.time,
+      estimatedPrice: '€' + newJob.price,
+    };
+
+    // Update state
+    setJobs(prevJobs => [...prevJobs, mappedJob]);
+  };
 
   useEffect(() => {
     loadSettings();
@@ -100,6 +128,8 @@ export default function JobsScreen() {
       nextDay.setDate(nextDay.getDate() + 1);
 
       filtered = filtered.filter(job => {
+        if (job.status === 'paused') return true; // Always show paused jobs
+        if (job.status === 'delayed') return true; // Always show delayed jobs
         if (!job.scheduledDate) return false;
         const jobDate = new Date(job.scheduledDate);
         jobDate.setHours(0, 0, 0, 0);
@@ -196,153 +226,178 @@ export default function JobsScreen() {
     return COLORS.border;
   };
 
-  const renderJobCard = (job: Job) => {
-    const statusStyle = getStatusStyle(job.status);
-    const priorityColor = getPriorityColor(job.priority);
-    const isPaused = job.status === 'paused';
-    const isDelayed = job.status === 'delayed';
-    const isConfirmed = job.status === 'confirmed';
-    const isPending = job.status === 'pending';
-    const borderColor = getBorderColor(job.status);
-    const borderWidth = (isPending || isConfirmed || isDelayed || isPaused) ? 2 : 1;
-
+  const renderPinnedJobCard = (job: Job) => {
     return (
-      <View
-        key={job.id}
-        style={[
-          styles.jobCard,
-          {
-            borderColor,
-            borderWidth,
-          },
-        ]}>
-        <TouchableOpacity
-          style={styles.infoButton}
-          onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
-        </TouchableOpacity>
-
-        <View style={styles.jobHeader}>
-          <View style={styles.jobHeaderTop}>
-            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
-              <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                {job.status.replace('-', ' ').toUpperCase()}
-              </Text>
-            </View>
-            {job.jobNumber && <Text style={styles.jobNumberText}>{job.jobNumber}</Text>}
-            <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
+      <View key={job.id} style={styles.pinnedCard}>
+        <View style={styles.pinnedHeader}>
+          <View style={styles.pinnedStatusBadge}>
+            <Text style={styles.pinnedStatusText}>PAUSED</Text>
           </View>
+          {job.timePosted && <Text style={styles.pinnedTimeText}>{job.timePosted}</Text>}
+        </View>
 
-          <View style={styles.jobHeaderMiddle}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{job.category}</Text>
-            </View>
-            <Text style={styles.jobTitle} numberOfLines={2}>
-              {job.title}
-            </Text>
-          </View>
+        <Text style={styles.pinnedTitle}>{job.title}</Text>
 
-          <View style={styles.jobClientRow}>
-            <Text style={styles.clientText}>
-              {job.technician || job.client} ⭐ {job.clientRating.toFixed(1)}
-            </Text>
+        <View style={styles.pinnedTagContainer}>
+          <View style={styles.pinnedTag}>
+            <Text style={styles.pinnedTagText}>Plumbing</Text>
           </View>
         </View>
 
-        <View style={styles.jobDetails}>
-          <Text style={styles.jobDescription}>{job.description}</Text>
+        <View style={styles.pinnedActions}>
+          <TouchableOpacity style={[styles.pinnedActionButton, { backgroundColor: '#3b82f6' }]}>
+            <Icon name="refresh" size={16} color="#fff" />
+            <Text style={styles.pinnedActionTextWhite}>Resume</Text>
+          </TouchableOpacity>
 
-          {job.scheduledDate && (
-            <View style={styles.jobDetailRow}>
-              <Text style={styles.jobDetailIcon}>🕐</Text>
-              <Text style={styles.jobDetailText}>
-                {formatJobDate(job.scheduledDate)}
-                {job.scheduledTime && ` • ${job.scheduledTime}`}
-                {job.estimatedDuration && `, ${job.estimatedDuration}`}
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity style={styles.pinnedActionButtonOutline}>
+            <Icon name="calendar-clock" size={16} color="#64748b" />
+            <Text style={styles.pinnedActionTextGray}>Reschedule</Text>
+          </TouchableOpacity>
 
-          <View style={styles.jobDetailRow}>
-            <Text style={styles.jobDetailIcon}>📍</Text>
-            <Text style={styles.jobDetailText} numberOfLines={1}>
-              {job.location} • {job.address}
-            </Text>
-          </View>
-
-          {(job.bidAmount || job.actualPrice || job.estimatedPrice) && (
-            <View style={styles.jobDetailRow}>
-              <Text style={styles.jobDetailIcon}>💰</Text>
-              <Text style={styles.jobDetailText}>
-                {job.bidAmount || job.actualPrice || job.estimatedPrice}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.jobActions}>
-          {isPaused && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
-                <Text style={styles.actionButtonTextPrimary}>✓ Resume</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonOutline}>
-                <Text style={styles.actionButtonText}>📅 Reschedule</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {isDelayed && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionButtonOutline}>
-                <Text style={styles.actionButtonText}>💬 Chat</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonOutline}>
-                <Text style={styles.actionButtonText}>📅 Reschedule</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
-                <Text style={styles.actionButtonTextPrimary}>+ Expense</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {isPending && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionButtonOutline}>
-                <Text style={styles.actionButtonText}>💬 Chat</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButtonOutline}>
-                <Text style={styles.actionButtonText}>📅 Schedule</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
-                <Text style={styles.actionButtonTextPrimary}>+ Expense</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {isConfirmed && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionButtonOutline}>
-                <Text style={styles.actionButtonText}>💬 Chat</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
-                <Text style={styles.actionButtonTextPrimary}>+ Expense</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
-                <Text style={styles.actionButtonTextPrimary}>Start Job</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {job.status === 'completed' && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.actionButtonOutline}>
-                <Text style={styles.actionButtonText}>➕ Expense</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionButton, { backgroundColor: orbColor }]}>
-                <Text style={styles.actionButtonTextPrimary}>📄 Invoice</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <TouchableOpacity style={styles.pinnedActionButtonOutline}>
+            <Icon name="calendar" size={16} color="#64748b" />
+            <Text style={styles.pinnedActionTextGray}>View Calendar</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
+  };
+
+  const renderFollowUpJobCard = (job: Job) => {
+    return (
+      <View key={job.id} style={styles.standardCard}>
+        <View style={styles.standardHeader}>
+          <View style={[styles.standardStatusBadge, { backgroundColor: '#3b0764', borderColor: '#7e22ce' }]}>
+            <Text style={[styles.standardStatusText, { color: '#e9d5ff' }]}>
+              DELAYED
+            </Text>
+          </View>
+          <Text style={styles.standardTimeText}>#{job.jobNumber || job.id.slice(0, 5)}</Text>
+        </View>
+
+        <View style={styles.standardContent}>
+          <Text style={styles.standardTitle}>{job.title}</Text>
+          <View style={styles.standardRatingRow}>
+            <Icon name="account" size={14} color="#94a3b8" />
+            <Text style={styles.standardClientText}>{job.client}</Text>
+            <Icon name="star" size={14} color="#eab308" style={{ marginLeft: 4 }} />
+            <Text style={styles.standardRatingText}>{job.clientRating.toFixed(1)}</Text>
+          </View>
+
+          <View style={styles.standardDetails}>
+            <View style={styles.standardDetailRow}>
+              <Icon name="text" size={14} color="#94a3b8" />
+              <Text style={styles.standardDetailText} numberOfLines={2}>{job.description}</Text>
+            </View>
+            {job.scheduledDate && (
+              <View style={styles.standardDetailRow}>
+                <Icon name="clock-time-four-outline" size={14} color="#94a3b8" />
+                <Text style={styles.standardDetailText}>
+                  {formatJobDate(job.scheduledDate)} • {job.scheduledTime}
+                </Text>
+              </View>
+            )}
+            <View style={styles.standardDetailRow}>
+              <Icon name="map-marker-outline" size={14} color="#94a3b8" />
+              <Text style={styles.standardDetailText} numberOfLines={1}>
+                {job.location} • {job.address}
+              </Text>
+            </View>
+            {job.bidAmount && (
+              <View style={styles.standardDetailRow}>
+                <Icon name="currency-euro" size={14} color="#94a3b8" />
+                <Text style={styles.standardDetailText}>{job.bidAmount}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.standardFooter}>
+          <TouchableOpacity style={styles.standardFooterButton}>
+            <Icon name="message-outline" size={18} color="#f1f5f9" />
+            <Text style={styles.standardFooterText}>Chat</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.standardFooterButton}>
+            <Icon name="calendar-edit" size={18} color="#f1f5f9" />
+            <Text style={styles.standardFooterText}>Reschedule</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.standardMainButton, { backgroundColor: '#3b82f6' }]}>
+            <Icon name="plus" size={18} color="#fff" />
+            <Text style={styles.standardMainButtonText}>Expense</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderStandardJobCard = (job: Job) => {
+    const isConfirmed = job.status === 'confirmed';
+    const isPending = job.status === 'pending';
+
+    return (
+      <View key={job.id} style={styles.standardCard}>
+        <View style={styles.standardHeader}>
+          <View style={[styles.standardStatusBadge, isPending && styles.statusBadgePending]}>
+            <Text style={[styles.standardStatusText, isPending && styles.statusTextPending]}>
+              {job.status.toUpperCase()}
+            </Text>
+          </View>
+          <Text style={styles.standardTimeText}>{job.scheduledTime}</Text>
+        </View>
+
+        <View style={styles.standardContent}>
+          <Text style={styles.standardTitle}>{job.title}</Text>
+          <View style={styles.standardRatingRow}>
+            <Icon name="account" size={14} color="#94a3b8" />
+            <Text style={styles.standardClientText}>{job.client}</Text>
+            <Icon name="star" size={14} color="#eab308" style={{ marginLeft: 4 }} />
+            <Text style={styles.standardRatingText}>{job.clientRating}</Text>
+          </View>
+
+          <View style={styles.standardDetails}>
+            <View style={styles.standardDetailRow}>
+              <Icon name="map-marker" size={14} color="#94a3b8" />
+              <Text style={styles.standardDetailText} numberOfLines={1}>{job.address}</Text>
+            </View>
+            {job.estimatedPrice && (
+              <View style={styles.standardDetailRow}>
+                <Icon name="currency-usd" size={14} color="#94a3b8" />
+                <Text style={styles.standardDetailText}>{job.estimatedPrice}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.standardFooter}>
+          <TouchableOpacity style={styles.standardFooterButton}>
+            <Icon name="message-outline" size={18} color="#f1f5f9" />
+            <Text style={styles.standardFooterText}>Chat</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.standardFooterButton}>
+            <Icon name="navigation-variant-outline" size={18} color="#f1f5f9" />
+            <Text style={styles.standardFooterText}>Navigate</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.standardMainButton, { backgroundColor: '#3b82f6' }]}>
+            <Icon name={isConfirmed ? "play" : "check"} size={18} color="#fff" />
+            <Text style={styles.standardMainButtonText}>
+              {isConfirmed ? "Start Job" : "Accept Job"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderJobCard = (job: Job) => {
+    if (job.status === 'paused') {
+      return renderPinnedJobCard(job);
+    }
+    return renderStandardJobCard(job);
   };
 
   const firstDelayedIndex = filteredJobs.findIndex(job => job.status === 'delayed');
@@ -358,13 +413,13 @@ export default function JobsScreen() {
         </View>
         <View style={styles.topBarRight}>
           <TouchableOpacity style={styles.notificationButton}>
-            <Text style={styles.notificationIcon}>🔔</Text>
+            <Icon name="bell-outline" size={24} color={COLORS.textPrimary} />
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationBadgeText}>1</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.addButton}>
-            <Text style={styles.addIcon}>➕</Text>
+            <Icon name="plus" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -417,40 +472,68 @@ export default function JobsScreen() {
       <ScrollView style={styles.jobsList} contentContainerStyle={styles.jobsListContent} showsVerticalScrollIndicator={false}>
         {/* Paused jobs section removed as they are now merged in main list per user request */}
 
-        {filter === 'week' && firstDelayedIndex !== -1 && (
-          <View style={styles.delayedSeparator}>
-            <View style={styles.delayedSeparatorLine} />
-            <View style={styles.delayedSeparatorBadge}>
-              <Text style={styles.delayedSeparatorIcon}>⚠️</Text>
-              <Text style={styles.delayedSeparatorText}>JOBS NEEDING FOLLOW-UP</Text>
-            </View>
-            <View style={styles.delayedSeparatorLine} />
-          </View>
-        )}
+
 
         {filteredJobs.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>💼</Text>
+            <Icon name="briefcase-outline" size={48} color={COLORS.textSecondary} />
             <Text style={styles.emptyStateText}>No jobs found</Text>
           </View>
         ) : (
-          filteredJobs.map(job => renderJobCard(job))
+          <>
+            {/* Pinned Jobs Section */}
+            {filteredJobs.some(j => j.status === 'paused') && (
+              <View>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionHeaderText}>Pinned Jobs ({filteredJobs.filter(j => j.status === 'paused').length})</Text>
+                </View>
+                {filteredJobs.filter(j => j.status === 'paused').map(job => renderPinnedJobCard(job))}
+              </View>
+            )}
+
+            {/* Follow-up Jobs Section */}
+            {filteredJobs.some(j => j.status === 'delayed') && (
+              <View>
+                <View style={styles.delayedSeparator}>
+                  <View style={styles.delayedSeparatorLine} />
+                  <View style={styles.delayedSeparatorBadge}>
+                    <Icon name="alert-circle-outline" size={16} color="#e9d5ff" />
+                    <Text style={styles.delayedSeparatorText}>JOBS NEEDING FOLLOW-UP</Text>
+                  </View>
+                  <View style={styles.delayedSeparatorLine} />
+                </View>
+                {filteredJobs.filter(j => j.status === 'delayed').map(job => renderFollowUpJobCard(job))}
+              </View>
+            )}
+
+            {/* Standard Jobs Section */}
+            <View>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.standardSectionHeaderText}>
+                  {filter === 'completed' ? 'Completed' : 'Upcoming'} ({filteredJobs.filter(j => j.status !== 'paused' && j.status !== 'delayed').length})
+                </Text>
+              </View>
+              {filteredJobs.filter(j => j.status !== 'paused' && j.status !== 'delayed').map(job => renderStandardJobCard(job))}
+            </View>
+          </>
         )}
       </ScrollView>
 
-      {delayedJobsCount > 0 && (
-        <View style={styles.bottomActionBar}>
-          <TouchableOpacity style={styles.followUpButton}>
-            <Text style={styles.followUpIcon}>⚠️</Text>
-            <Text style={styles.followUpText}>JOBS NEEDING FOLLOW-UP</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
-      <TouchableOpacity style={[styles.floatingAddButton, { backgroundColor: orbColor }]}>
-        <Text style={styles.floatingAddIcon}>➕</Text>
+
+      <TouchableOpacity
+        style={[styles.floatingAddButton, { backgroundColor: orbColor }]}
+        onPress={() => setIsAddJobModalVisible(true)}
+      >
+        <Icon name="plus" size={24} color="#ffffff" />
         <Text style={styles.floatingAddText}>Add Job</Text>
       </TouchableOpacity>
+
+      <AddJobModal
+        visible={isAddJobModalVisible}
+        onClose={() => setIsAddJobModalVisible(false)}
+        onJobCreated={handleJobCreated}
+      />
     </View>
   );
 }
@@ -760,33 +843,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textSecondary,
   },
-  bottomActionBar: {
-    position: 'absolute',
-    bottom: 80,
-    left: 16,
-    right: 16,
-  },
-  followUpButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#2e1065',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: COLORS.purple,
-  },
-  followUpIcon: {
-    fontSize: 16,
-  },
-  followUpText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ddd6fe',
-    letterSpacing: 0.5,
-  },
+
   floatingAddButton: {
     position: 'absolute',
     bottom: 20,
@@ -811,5 +868,253 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#ffffff',
+  },
+
+  sectionHeader: {
+    paddingHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ef4444',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  standardSectionHeaderText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3b82f6',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // Pinned Card Styles (White/Light Theme)
+  pinnedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    borderRightWidth: 1,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  pinnedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pinnedStatusBadge: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  pinnedStatusText: {
+    color: '#dc2626',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  pinnedTimeText: {
+    color: '#64748b',
+    fontSize: 12,
+  },
+  pinnedTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  pinnedTagContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  pinnedTag: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pinnedTagText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  pinnedActions: {
+    flexDirection: 'row',
+    gap: 1,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 12,
+  },
+  pinnedActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  pinnedActionButtonOutline: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  pinnedActionTextWhite: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pinnedActionTextGray: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Standard Card Styles (Dark/Slate Theme)
+  standardCard: {
+    backgroundColor: '#020617', // Very dark/black
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+    borderRightWidth: 1,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#1e293b',
+    marginHorizontal: 16,
+    marginTop: 12,
+    overflow: 'hidden',
+  },
+  standardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  standardStatusBadge: {
+    backgroundColor: '#172554',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#1e40af',
+  },
+  statusBadgePending: {
+    backgroundColor: '#451a03',
+    borderColor: '#92400e',
+  },
+  standardStatusText: {
+    color: '#60a5fa',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  statusTextPending: {
+    color: '#fbbf24',
+  },
+  standardTimeText: {
+    color: '#94a3b8',
+    fontSize: 12,
+  },
+  standardContent: {
+    padding: 16,
+  },
+  standardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#f8fafc',
+    marginBottom: 8,
+  },
+  standardRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  standardClientText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    marginLeft: 4,
+  },
+  standardRatingText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    marginLeft: 2,
+    fontWeight: '600',
+  },
+  standardDetails: {
+    gap: 6,
+  },
+  standardDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  standardDetailText: {
+    color: '#94a3b8',
+    fontSize: 13,
+  },
+  standardFooter: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+    backgroundColor: '#0f172a',
+    padding: 4,
+  },
+  standardFooterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 6,
+    flex: 1,
+  },
+  standardFooterText: {
+    color: '#f1f5f9',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  standardMainButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 4,
+    gap: 6,
+    flex: 2,
+    margin: 4,
+    marginLeft: 8,
+  },
+  standardMainButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

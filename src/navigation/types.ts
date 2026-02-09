@@ -18,6 +18,7 @@ export type MainTabParamList = {
 };
 
 export type MainStackParamList = {
+  MainTabs: undefined;
   Dashboard: undefined;
   JobsList: undefined;
   JobDetail: { jobId: string };
@@ -33,6 +34,7 @@ export type MainStackParamList = {
   InvoiceDetail: { invoiceId: string };
   Expenses: undefined;
   CreateExpense: undefined;
+  ProfileCompletion: undefined;
 };
 
 // Combine all param lists for type safety

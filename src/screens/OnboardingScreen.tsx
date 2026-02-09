@@ -3,6 +3,7 @@
  * Simplified version migrated from web app's ProviderOnboardingFlow
  */
 
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
@@ -46,27 +47,27 @@ const COLOR_OPTIONS = [
 
 // Service categories matching web version EXACTLY (16 categories)
 const SERVICE_CATEGORIES = [
-  '🏠 Home & Property',
-  '🏗️ Trades & Construction',
-  '🚗 Auto & Transport',
-  '🌳 Outdoor & Garden',
-  '💆 Wellness & Care',
-  '💅 Beauty & Personal',
-  '🐾 Pets & Animals',
-  '🎉 Events & Entertainment',
-  '🍽️ Food & Hospitality',
-  '📚 Education & Tutoring',
-  '💼 Business & Office',
-  '💻 Tech & Digital',
-  '🎨 Design & Creative',
-  '💰 Finance & Legal',
-  '📦 Logistics & Delivery',
-  '✨ Other',
+  'Home & Property',
+  'Trades & Construction',
+  'Auto & Transport',
+  'Outdoor & Garden',
+  'Wellness & Care',
+  'Beauty & Personal',
+  'Pets & Animals',
+  'Events & Entertainment',
+  'Food & Hospitality',
+  'Education & Tutoring',
+  'Business & Office',
+  'Tech & Digital',
+  'Design & Creative',
+  'Finance & Legal',
+  'Logistics & Delivery',
+  'Other',
 ];
 
 // Service domains - EXACT match with web version (all sub-services included)
 const SERVICE_DOMAINS: { [key: string]: string[] } = {
-  '🏠 Home & Property': [
+  'Home & Property': [
     'Regular Cleaning', 'Deep Cleaning', 'Move-In/Out Cleaning', 'Window Cleaning', 'Carpet Cleaning',
     'Electrical Wiring', 'Lighting Installation', 'Smart Home Setup', 'EV Chargers',
     'Leak Repair', 'Toilet Installation', 'Water Heater', 'Drain Cleaning', 'Pipe Replacement',
@@ -81,7 +82,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Home Inspection', 'Energy Inspection', 'Structural Inspection',
     'General Repairs', 'Furniture Assembly', 'TV Mounting', 'Odd Jobs'
   ],
-  '🏗️ Trades & Construction': [
+  'Trades & Construction': [
     'Roof Installation', 'Roof Leak Repair', 'Tile Replacement',
     'Tile Flooring', 'Vinyl Flooring', 'Hardwood Flooring', 'Laminate Flooring', 'Floor Polishing',
     'Driveway Installation', 'Patio Construction', 'Foundation Work',
@@ -92,7 +93,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Window Replacement', 'Glass Tinting', 'Glazing',
     'Partial Demolition', 'Full Demolition', 'Debris Removal'
   ],
-  '🚗 Auto & Transport': [
+  'Auto & Transport': [
     'Engine Repair', 'Brake Service', 'Transmission Repair', 'Diagnostics',
     'Car Wash', 'Interior Detailing', 'Exterior Detailing', 'Ceramic Coating',
     'Towing', 'Battery Jump Start', 'Tire Change', 'Roadside Assistance',
@@ -100,7 +101,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Motorcycle Tune-Up', 'Motorcycle Maintenance', 'Motorcycle Customization',
     'Boat Cleaning', 'Boat Repair', 'RV Maintenance', 'RV Storage'
   ],
-  '🌳 Outdoor & Garden': [
+  'Outdoor & Garden': [
     'Landscape Design', 'Landscape Installation', 'Landscape Maintenance',
     'Lawn Mowing', 'Fertilizing', 'Weed Control',
     'Tree Trimming', 'Tree Removal', 'Stump Grinding',
@@ -108,7 +109,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Sprinkler Installation', 'Drip Systems', 'Drainage Solutions',
     'Pathway Lighting', 'Security Lighting', 'Garden Lighting'
   ],
-  '💆 Wellness & Care': [
+  'Wellness & Care': [
     'Deep Tissue Massage', 'Sports Massage', 'Relaxation Massage', 'Couples Massage',
     'Personal Training', 'Yoga Classes', 'Pilates', 'CrossFit',
     'Therapy', 'Counseling', 'Life Coaching',
@@ -116,7 +117,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Babysitting', 'Nanny Services', 'After-School Care',
     'In-Home Nursing', 'Post-Surgery Care', 'Medication Assistance'
   ],
-  '💅 Beauty & Personal': [
+  'Beauty & Personal': [
     'Haircuts', 'Hair Coloring', 'Hair Styling', 'Hair Extensions',
     'Wedding Makeup', 'Event Makeup', 'Makeup Tutorials',
     'Manicure', 'Pedicure', 'Acrylic Nails', 'Gel Nails',
@@ -124,7 +125,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Tattoo Design', 'Piercing', 'Tattoo Aftercare',
     'Wardrobe Consulting', 'Image Consulting', 'Personal Shopping'
   ],
-  '🐾 Pets & Animals': [
+  'Pets & Animals': [
     'Pet Feeding', 'Dog Walking', 'Pet Sitting',
     'Pet Bathing', 'Pet Trimming', 'Pet Styling',
     'Obedience Training', 'Behavioral Training',
@@ -132,7 +133,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Pet Photography', 'Pet Event Photography',
     'Pet Relocation', 'Airport Pet Pickup'
   ],
-  '🎉 Events & Entertainment': [
+  'Events & Entertainment': [
     'Wedding Photography', 'Corporate Photography', 'Real Estate Photography', 'Event Videography',
     'Catering Services', 'Private Chef', 'Bartending', 'Mixology',
     'Wedding Planning', 'Birthday Planning', 'Corporate Events',
@@ -141,7 +142,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Chair Rentals', 'Tent Rentals', 'Audio-Visual Rentals',
     'Magicians', 'Event Hosts', 'Performers'
   ],
-  '🍽️ Food & Hospitality': [
+  'Food & Hospitality': [
     'Corporate Catering', 'Private Catering', 'Outdoor Catering',
     'Weekly Meal Prep', 'Healthy Meal Plans',
     'At-Home Dining', 'Private Events',
@@ -149,7 +150,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Event Bartenders', 'Professional Mixologists',
     'Online Cooking Classes', 'In-Person Cooking Classes'
   ],
-  '📚 Education & Tutoring': [
+  'Education & Tutoring': [
     'Math Tutoring', 'Science Tutoring', 'Language Tutoring', 'History Tutoring',
     'SAT Prep', 'IELTS Prep', 'GMAT Prep', 'College Exam Prep',
     'Piano Lessons', 'Guitar Lessons', 'Drawing Lessons', 'Dance Classes',
@@ -158,7 +159,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Learning Support', 'Dyslexia Coaching',
     'English Lessons', 'Portuguese Lessons', 'French Lessons', 'Spanish Lessons', 'German Lessons'
   ],
-  '💼 Business & Office': [
+  'Business & Office': [
     'Virtual Assistant', 'Scheduling', 'Data Entry',
     'Bookkeeping', 'Payroll', 'Invoicing',
     'Recruiting', 'HR Policy Setup', 'Benefits Administration',
@@ -166,7 +167,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Remote Customer Support', 'Chat Support',
     'Business Incorporation', 'Licensing', 'VAT Registration'
   ],
-  '💻 Tech & Digital': [
+  'Tech & Digital': [
     'Computer Repair', 'Virus Removal', 'Network Setup',
     'App Development', 'Website Development', 'API Development',
     'Workflow Automation', 'Custom AI Models',
@@ -174,7 +175,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Penetration Testing', 'Security Hardening', 'Security Monitoring',
     'Smart Device Setup', 'Troubleshooting', 'IoT Integration'
   ],
-  '🎨 Design & Creative': [
+  'Design & Creative': [
     'Logo Design', 'Branding', 'Print Design',
     'UI Design', 'UX Design', 'Website Design', 'App Design', 'Prototypes',
     '3D Rendering', 'Floor Plans', 'Product Design',
@@ -182,7 +183,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Blog Writing', 'Ad Copywriting', 'Product Descriptions',
     'Marketing Campaigns', 'SEO', 'Ads Management'
   ],
-  '💰 Finance & Legal': [
+  'Finance & Legal': [
     'Tax Preparation', 'VAT Filing', 'Bookkeeping',
     'Budget Planning', 'Investment Advice', 'Retirement Planning',
     'Health Insurance', 'Auto Insurance', 'Property Insurance',
@@ -190,7 +191,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Contract Review', 'Property Law', 'Immigration Law', 'Family Law',
     'Document Certification', 'Apostille', 'Legal Translation'
   ],
-  '📦 Logistics & Delivery': [
+  'Logistics & Delivery': [
     'Local Moving', 'Long Distance Moving', 'Packing Services',
     'Same-Day Delivery', 'Scheduled Delivery', 'Food Delivery', 'Package Delivery',
     'Document Courier', 'Urgent Item Delivery',
@@ -198,7 +199,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
     'Temporary Storage', 'Long-Term Storage', 'Secure Storage',
     'Grocery Shopping', 'Pickup & Drop-off Services'
   ],
-  '✨ Other': []  // Special category for custom services
+  'Other': []  // Special category for custom services
 };
 
 export default function OnboardingScreen() {
@@ -215,8 +216,8 @@ export default function OnboardingScreen() {
   const [customServiceInput, setCustomServiceInput] = useState('');
   const [typingMessage, setTypingMessage] = useState('');
   const typingCompleteRef = useRef(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
-  
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Step 4: Base Location & Coverage state
   const [newBaseNickname, setNewBaseNickname] = useState('');
   const [newBaseLocation, setNewBaseLocation] = useState('');
@@ -234,10 +235,10 @@ export default function OnboardingScreen() {
   const [hasUnlimitedCoverage, setHasUnlimitedCoverage] = useState(false);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [showCoverageInfo, setShowCoverageInfo] = useState(false);
-  
+
   // Step 5: Working Hours state
   const [workingHours, setWorkingHours] = useState<WorkingHours | null>(null);
-  
+
   // Step 6: Personal Information state
   const [personalInfo, setPersonalInfo] = useState<{
     firstName: string;
@@ -245,7 +246,7 @@ export default function OnboardingScreen() {
     countryCode: string;
     vatNif: string;
   } | null>(null);
-  
+
   // Step 7: Billing Information state
   const [billingInfo, setBillingInfo] = useState<{
     usePersonalInfo: boolean;
@@ -255,7 +256,7 @@ export default function OnboardingScreen() {
     city?: string;
     postalCode?: string;
   } | null>(null);
-  
+
   // Step 8: Calendar Sync state
   const [calendarSync, setCalendarSync] = useState<{
     calendarConnected: boolean;
@@ -264,13 +265,13 @@ export default function OnboardingScreen() {
 
   const handleServiceToggle = (service: string) => {
     const currentServices = selectedServices || [];
-    
+
     // If trying to add and already at max (3), don't add
     if (!currentServices.includes(service) && currentServices.length >= 3) {
       // Show error (you can add toast later)
       return;
     }
-    
+
     const updatedServices = currentServices.includes(service)
       ? currentServices.filter(s => s !== service)
       : [...currentServices, service];
@@ -280,12 +281,12 @@ export default function OnboardingScreen() {
   const addCustomService = (customService: string) => {
     if (customService.trim() && !selectedServices.includes(customService.trim())) {
       const currentServices = selectedServices || [];
-      
+
       // If already at max (3), don't add
       if (currentServices.length >= 3) {
         return;
       }
-      
+
       setSelectedServices([...currentServices, customService.trim()]);
       setCustomServiceInput('');
       setSelectedCategory(null);
@@ -303,7 +304,7 @@ export default function OnboardingScreen() {
       }
       return services;
     }
-    
+
     // Filter categories
     if (serviceSearchQuery.trim()) {
       return SERVICE_CATEGORIES.filter(cat =>
@@ -372,7 +373,7 @@ export default function OnboardingScreen() {
         return selectedServices.length > 0;
       case 4:
         const hasValidBase = baseLocations.length > 0;
-        const hasValidCoverage = coverageMode === 'distance' 
+        const hasValidCoverage = coverageMode === 'distance'
           ? (hasUnlimitedCoverage || coverageRadius > 0)
           : selectedCities.length > 0;
         return (hasValidBase && hasValidCoverage) || hasUnlimitedCoverage;
@@ -383,13 +384,13 @@ export default function OnboardingScreen() {
           day =>
             day.active &&
             day.blocks.length > 0 &&
-            day.blocks.some(block => block.start && block.end && block.start < block.end)
+            day.blocks.some((block: any) => block.start && block.end && block.start < block.end)
         );
       case 6:
         // Validate personal information - firstName and lastName required
-        return personalInfo !== null && 
-               personalInfo.firstName.trim().length > 0 && 
-               personalInfo.lastName.trim().length > 0;
+        return personalInfo !== null &&
+          personalInfo.firstName.trim().length > 0 &&
+          personalInfo.lastName.trim().length > 0;
       case 7:
         // Validate billing information
         if (!billingInfo) return false;
@@ -415,15 +416,15 @@ export default function OnboardingScreen() {
       <View style={styles.orbContainer}>
         <StartupOrb size="lg" intensity="normal" color="#0088cc" />
       </View>
-      
+
       {/* Title */}
       <Text style={styles.stepTitle}>What would you like to be called?</Text>
-      
+
       {/* Input Section */}
       <View style={styles.nameInputContainer}>
         <Label style={styles.nameLabel}>Nickname/First Name</Label>
         <View style={styles.inputWrapper}>
-          <Text style={styles.userIcon}>👤</Text>
+          <Icon name="account-outline" size={24} color="#9ca3af" style={styles.userIcon} />
           <Input
             placeholder="Enter your name…"
             value={firstName}
@@ -432,12 +433,10 @@ export default function OnboardingScreen() {
             style={styles.nameInput}
             autoFocus
           />
-          {firstName && firstName.trim().length >= 2 && (
-            <Text style={styles.checkIcon}>✓</Text>
-          )}
+          <Icon name="check" size={20} color={Colors.emerald600} style={styles.checkIcon} />
         </View>
       </View>
-      
+
       {/* Helper text */}
       <Text style={styles.helperText}>
         This is just how I'll address you in chat and what clients will see on their end — we'll ask for legal details later for compliance.
@@ -459,57 +458,57 @@ export default function OnboardingScreen() {
     // Reset when step changes
     typingCompleteRef.current = false;
     setTypingMessage('');
-    
+
     // Clear any existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-      
-      const fullMessage = `Hello ${firstName}, nice to meet you. Now it's time to set me up. What would you like to call me?`;
-      const segments = [
-        { text: `Hello ${firstName},`, pauseAfter: 800 },
-        { text: ' nice to meet you.', pauseAfter: 600 },
-        { text: ` Now it's time to set me up.`, pauseAfter: 600 },
-        { text: ' What would you like to call me?', pauseAfter: 0 }
-      ];
 
-      let currentText = '';
-      let segmentIndex = 0;
-      let charIndex = 0;
-      const typingSpeed = 30;
+    const fullMessage = `Hello ${firstName}, nice to meet you. Now it's time to set me up. What would you like to call me?`;
+    const segments = [
+      { text: `Hello ${firstName},`, pauseAfter: 800 },
+      { text: ' nice to meet you.', pauseAfter: 600 },
+      { text: ` Now it's time to set me up.`, pauseAfter: 600 },
+      { text: ' What would you like to call me?', pauseAfter: 0 }
+    ];
 
-      const typeCharacter = () => {
-        if (typingCompleteRef.current) return;
-        
-        const currentSegment = segments[segmentIndex];
-        if (!currentSegment) {
-          typingCompleteRef.current = true;
-          return;
-        }
+    let currentText = '';
+    let segmentIndex = 0;
+    let charIndex = 0;
+    const typingSpeed = 30;
 
-        if (charIndex < currentSegment.text.length) {
-          currentText += currentSegment.text[charIndex];
-          setTypingMessage(currentText);
-          charIndex++;
-          typingTimeoutRef.current = setTimeout(typeCharacter, typingSpeed);
+    const typeCharacter = () => {
+      if (typingCompleteRef.current) return;
+
+      const currentSegment = segments[segmentIndex];
+      if (!currentSegment) {
+        typingCompleteRef.current = true;
+        return;
+      }
+
+      if (charIndex < currentSegment.text.length) {
+        currentText += currentSegment.text[charIndex];
+        setTypingMessage(currentText);
+        charIndex++;
+        typingTimeoutRef.current = setTimeout(typeCharacter, typingSpeed);
+      } else {
+        segmentIndex++;
+        charIndex = 0;
+        if (currentSegment.pauseAfter > 0) {
+          typingTimeoutRef.current = setTimeout(typeCharacter, currentSegment.pauseAfter);
         } else {
-          segmentIndex++;
-          charIndex = 0;
-          if (currentSegment.pauseAfter > 0) {
-            typingTimeoutRef.current = setTimeout(typeCharacter, currentSegment.pauseAfter);
-          } else {
-            typeCharacter();
-          }
+          typeCharacter();
         }
-      };
+      }
+    };
 
-      typingTimeoutRef.current = setTimeout(typeCharacter, 300);
+    typingTimeoutRef.current = setTimeout(typeCharacter, 300);
 
-      return () => {
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
-      };
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
   }, [currentStep, firstName]);
 
   const renderStep1 = () => {
@@ -560,9 +559,7 @@ export default function OnboardingScreen() {
               autoCapitalize="words"
               style={styles.customNameInput}
             />
-            {assistantName && assistantName.trim().length >= 2 && (
-              <Text style={styles.checkIcon}>✓</Text>
-            )}
+            <Icon name="check" size={20} color="#10b981" style={styles.checkIcon} />
           </View>
         </View>
 
@@ -602,10 +599,10 @@ export default function OnboardingScreen() {
 
         {/* Title - Assistant name */}
         <Text style={styles.assistantNameTitle}>{assistantName || 'Assistant'}</Text>
-        
+
         {/* Subtitle */}
         <Text style={styles.orbSubtitle}>Let's pick how I look.</Text>
-        
+
         {/* Hint text */}
         <Text style={styles.orbHint}>You can change this anytime in Settings.</Text>
 
@@ -629,7 +626,7 @@ export default function OnboardingScreen() {
                 />
                 {isSelected && (
                   <View style={styles.orbAvatarCheckmark}>
-                    <Text style={styles.orbAvatarCheckmarkText}>✓</Text>
+                    <Icon name="check" size={14} color="#ffffff" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -656,8 +653,8 @@ export default function OnboardingScreen() {
           {selectedCategory && selectedCategory !== '✨ Other'
             ? selectedCategory
             : selectedCategory === '✨ Other'
-            ? 'Describe your service'
-            : 'What kind of services do you provide?'}
+              ? 'Describe your service'
+              : 'What kind of services do you provide?'}
         </Text>
 
         {/* Instructions */}
@@ -672,14 +669,14 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             onPress={() => setShowServiceHelp(!showServiceHelp)}
             style={styles.helpButton}>
-            <Text style={styles.helpButtonText}>ℹ️ I don't know what type of services I provide</Text>
+            <Text style={styles.helpButtonText}><Icon name="information-outline" size={16} /> I don't know what type of services I provide</Text>
           </TouchableOpacity>
         )}
 
         {/* Search bar */}
         {!selectedCategory && (
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Icon name="magnify" size={20} color="#9ca3af" style={styles.searchIcon} />
             <Input
               placeholder="Search categories..."
               value={serviceSearchQuery}
@@ -691,7 +688,7 @@ export default function OnboardingScreen() {
 
         {selectedCategory && selectedCategory !== '✨ Other' && (
           <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Icon name="magnify" size={20} color="#9ca3af" style={styles.searchIcon} />
             <Input
               placeholder="Search services..."
               value={serviceSearchQuery}
@@ -714,7 +711,7 @@ export default function OnboardingScreen() {
                   <TouchableOpacity
                     onPress={() => handleServiceToggle(service)}
                     style={styles.serviceChipRemove}>
-                    <Text style={styles.serviceChipRemoveText}>×</Text>
+                    <Icon name="close" size={16} color="#ffffff" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -730,7 +727,7 @@ export default function OnboardingScreen() {
               setServiceSearchQuery('');
             }}
             style={styles.backToCategoriesButton}>
-            <Text style={styles.backToCategoriesText}>← Back to categories</Text>
+            <Text style={styles.backToCategoriesText}><Icon name="arrow-left" size={16} /> Back to categories</Text>
           </TouchableOpacity>
         )}
 
@@ -773,17 +770,17 @@ export default function OnboardingScreen() {
                       {item}
                     </Text>
                     {isCategory && (
-                      <Text style={styles.chevronIcon}>›</Text>
+                      <Icon name="chevron-right" size={20} color="#9ca3af" />
                     )}
                     {!isCategory && isSelected && (
-                      <Text style={styles.checkIcon}>✓</Text>
+                      <Icon name="check" size={20} color="#10b981" style={styles.checkIcon} />
                     )}
                   </TouchableOpacity>
                 );
               })
             ) : (
               <Text style={styles.noResultsText}>
-                {serviceSearchQuery.trim() 
+                {serviceSearchQuery.trim()
                   ? 'No results found. Try a different search term.'
                   : 'No services available.'}
               </Text>
@@ -825,12 +822,14 @@ export default function OnboardingScreen() {
           style={[styles.learnMoreContainer, { borderColor: `${orbColor}66` }]}>
           <View style={styles.learnMoreHeader}>
             <View style={[styles.learnMoreIcon, { backgroundColor: `${orbColor}4D` }]}>
-              <Text style={[styles.learnMoreIconText, { color: orbColor }]}>✨</Text>
+              <Icon name="sparkles" size={16} color={orbColor} />
             </View>
             <Text style={[styles.learnMoreText, { color: orbColor }]}>Learn more about this</Text>
-            <Text style={[styles.learnMoreChevron, { color: orbColor }]}>
-              {showEnhancedCustomization ? '⌄' : '›'}
-            </Text>
+            <Icon
+              name={showEnhancedCustomization ? "chevron-down" : "chevron-right"}
+              size={20}
+              color={orbColor}
+            />
           </View>
         </TouchableOpacity>
       </View>
@@ -904,11 +903,11 @@ export default function OnboardingScreen() {
           style={styles.step4ScrollView}
           contentContainerStyle={styles.step4ScrollContent}
           showsVerticalScrollIndicator={true}>
-          
+
           {/* Base Address Section */}
           <View style={styles.baseSection}>
             <Label style={styles.sectionLabel}>Base Address</Label>
-            
+
             {/* Existing base location */}
             {baseLocations.length > 0 && (
               <View style={styles.existingBaseContainer}>
@@ -921,10 +920,10 @@ export default function OnboardingScreen() {
                   </View>
                   <View style={styles.existingBaseActions}>
                     <TouchableOpacity onPress={editBaseLocation} style={styles.editButton}>
-                      <Text style={styles.editButtonText}>✏️</Text>
+                      <Icon name="pencil" size={16} color="#4b5563" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={removeBaseLocation} style={styles.removeButton}>
-                      <Text style={styles.removeButtonText}>×</Text>
+                      <Icon name="close" size={16} color="#ef4444" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -940,10 +939,10 @@ export default function OnboardingScreen() {
                   onChangeText={setNewBaseNickname}
                   style={styles.baseInput}
                 />
-                
+
                 <View style={styles.addressRow}>
                   <View style={styles.addressInputWrapper}>
-                    <Text style={styles.mapPinIcon}>📍</Text>
+                    <Icon name="map-marker" size={18} color="#9ca3af" style={styles.mapPinIcon} />
                     <Input
                       placeholder="Street address"
                       value={newBaseLocation}
@@ -952,7 +951,7 @@ export default function OnboardingScreen() {
                     />
                   </View>
                   <TouchableOpacity onPress={getCurrentLocation} style={styles.locationButton}>
-                    <Text style={styles.locationButtonText}>🎯</Text>
+                    <Icon name="crosshairs-gps" size={18} color={orbColor} />
                   </TouchableOpacity>
                 </View>
 
@@ -985,7 +984,7 @@ export default function OnboardingScreen() {
           {/* Coverage Options */}
           <View style={styles.coverageSection}>
             <Label style={styles.sectionLabel}>How far do you travel?</Label>
-            
+
             {/* Coverage Mode Toggle */}
             <View style={styles.coverageModeToggle}>
               <TouchableOpacity
@@ -1032,7 +1031,7 @@ export default function OnboardingScreen() {
                         <Text style={styles.distanceUnit}>km</Text>
                       </View>
                     </View>
-                    
+
                     {/* Simple Slider using buttons */}
                     <View style={styles.sliderContainer}>
                       <View style={styles.sliderTrack}>
@@ -1055,7 +1054,7 @@ export default function OnboardingScreen() {
                         <Text style={styles.sliderMarkerText}>100 km</Text>
                       </View>
                     </View>
-                    
+
                     {/* Distance adjustment buttons */}
                     <View style={styles.distanceButtons}>
                       {[5, 10, 15, 20, 30, 50, 100].map((value) => (
@@ -1102,7 +1101,7 @@ export default function OnboardingScreen() {
                 <Text style={styles.cityModeLabel}>
                   Select areas in Greater Lisbon where you want to work:
                 </Text>
-                
+
                 {/* Selected cities */}
                 {selectedCities.length > 0 && (
                   <View style={styles.selectedCitiesContainer}>
@@ -1120,8 +1119,8 @@ export default function OnboardingScreen() {
                 )}
 
                 {/* City selection grid */}
-                <ScrollView 
-                  style={styles.citiesScrollView} 
+                <ScrollView
+                  style={styles.citiesScrollView}
                   contentContainerStyle={styles.citiesScrollContent}
                   nestedScrollEnabled={true}
                   showsVerticalScrollIndicator={true}>
@@ -1304,7 +1303,7 @@ export default function OnboardingScreen() {
   const renderStep7 = () => {
     // Get base location from step 4
     const primaryBase = baseLocations && baseLocations.length > 0 ? baseLocations[0] : undefined;
-    
+
     return (
       <BillingInformationScreen
         orbColor={orbColor}
@@ -1387,12 +1386,12 @@ export default function OnboardingScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {/* Background gradient - matching web version */}
       <View style={styles.backgroundGradient} />
-      
+
       {/* Subtle decorative dots - matching web version */}
       <View style={styles.decorativeDot1} />
       <View style={styles.decorativeDot2} />
       <View style={styles.decorativeDot3} />
-      
+
       {/* Hide header for step 0 to match web version */}
       {currentStep > 0 && (
         <View style={styles.header}>
@@ -1432,7 +1431,7 @@ export default function OnboardingScreen() {
               <View style={styles.backButtonTouchable} /> // Spacer when no back button
             )}
             <Button
-              title={currentStep === 0 ? 'Continue' : currentStep === 9 ? 'Complete Setup' : 'Continue'}
+              title={(currentStep as number) === 0 ? 'Continue' : (currentStep as number) === 9 ? 'Complete Setup' : 'Continue'}
               onPress={handleNext}
               disabled={!canProceed()}
               style={[styles.nextButton, currentStep === 0 && styles.nextButtonFullWidth]}
@@ -1605,12 +1604,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.foreground,
     textAlign: 'center',
-  },
-  servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'center',
   },
   serviceOption: {
     paddingHorizontal: 20,

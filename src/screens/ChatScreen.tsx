@@ -16,6 +16,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { StartupOrb } from '../components/StartupOrb';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
@@ -354,7 +355,7 @@ export default function ChatScreen() {
           onPress={() => handleSendMessage()}
           style={[styles.sendButton, { backgroundColor: orbColor }]}
           disabled={!inputText.trim()}>
-          <Text style={styles.sendButtonText}>→</Text>
+          <Icon name="send" size={20} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
@@ -365,7 +366,7 @@ export default function ChatScreen() {
           onPress={() => {
             // Future: Open voice/attachment menu
           }}>
-          <Text style={styles.floatingOrbText}>🎤</Text>
+          <Icon name="microphone-outline" size={24} color="#ffffff" />
         </TouchableOpacity>
       </View>
 

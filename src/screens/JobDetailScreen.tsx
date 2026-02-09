@@ -10,7 +10,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
@@ -51,7 +54,7 @@ export default function JobDetailScreen() {
   const loadSettings = async () => {
     try {
       const color = await jsonStorage.getItem(STORAGE_KEYS.ORB_COLOR);
-      if (color) setOrbColor(color);
+      if (color) setOrbColor(color as string);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
@@ -98,8 +101,9 @@ export default function JobDetailScreen() {
     return (
       <View style={styles.screen}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButton}>‹ Back</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Icon name="chevron-left" size={24} color={Colors.foreground} />
+            <Text style={styles.backButtonText}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Job Details</Text>
           <View style={styles.headerSpacer} />
@@ -157,8 +161,9 @@ export default function JobDetailScreen() {
     <View style={styles.screen}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: orbColor + '10' }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>‹ Back</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="chevron-left" size={24} color={Colors.foreground} />
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Job Details</Text>
         <View style={styles.headerSpacer} />
@@ -184,7 +189,7 @@ export default function JobDetailScreen() {
                       backgroundColor: getStatusBgColor(job.status),
                       borderColor: getStatusColor(job.status),
                     },
-                  ]}>
+                  ] as any}>
                   <Text style={[styles.statusText, { color: getStatusColor(job.status) }]}>
                     {job.status.replace('-', ' ').toUpperCase()}
                   </Text>
@@ -213,7 +218,7 @@ export default function JobDetailScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Client:</Text>
               <Text style={styles.infoValue}>
-                {job.client} {job.clientRating ? `⭐ ${job.clientRating.toFixed(1)}` : ''}
+                {job.client} {job.clientRating ? <><Icon name="star" size={14} color="#fbbf24" /> {job.clientRating.toFixed(1)}</> : ''}
               </Text>
             </View>
             {job.phoneNumber && (
@@ -425,7 +430,7 @@ export default function JobDetailScreen() {
           setShowCompleteModal(false);
         }}
         jobTitle={job?.title}
-        estimatedPrice={job?.bidAmount || job?.estimatedPrice}
+        estimatedPrice={(job?.bidAmount || job?.estimatedPrice) as string}
       />
     </View>
   );
@@ -445,9 +450,14 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 80,
+  },
+  backButtonText: {
     fontSize: 16,
     color: Colors.foreground,
-    width: 60,
+    marginLeft: -4,
   },
   headerTitle: {
     flex: 1,

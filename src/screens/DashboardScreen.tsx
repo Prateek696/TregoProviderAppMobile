@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
@@ -40,56 +41,56 @@ const STATS: Stat[] = [
     label: 'Billing',
     value: '€4,280',
     change: 18,
-    icon: '💰',
+    icon: 'cash',
     color: '#10b981',
   },
   {
     label: 'Rating',
     value: '4.9',
     change: 2,
-    icon: '⭐',
+    icon: 'star',
     color: '#f59e0b',
   },
   {
     label: 'Response Time',
     value: '12m',
     change: -20,
-    icon: '⏱️',
+    icon: 'clock-outline',
     color: '#8b5cf6',
   },
   {
     label: 'Active Jobs',
     value: '12',
     change: 33,
-    icon: '💼',
+    icon: 'briefcase',
     color: '#3b82f6',
   },
   {
     label: 'Completed',
     value: '247',
     change: 10,
-    icon: '✅',
+    icon: 'check-circle',
     color: '#06b6d4',
   },
   {
     label: 'Avg per Job',
     value: '€156',
     change: 8,
-    icon: '📈',
+    icon: 'trending-up',
     color: '#14b8a6',
   },
   {
     label: 'Bids Placed',
     value: '34',
     change: 31,
-    icon: '🎯',
+    icon: 'target',
     color: '#f97316',
   },
   {
     label: 'Win Rate',
     value: '82%',
     change: 5,
-    icon: '🏆',
+    icon: 'trophy',
     color: '#6366f1',
   },
 ];
@@ -110,7 +111,7 @@ export default function DashboardScreen() {
   const loadSettings = async () => {
     try {
       const color = await jsonStorage.getItem(STORAGE_KEYS.ORB_COLOR);
-      if (color) setOrbColor(color);
+      if (color) setOrbColor(color as string);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
@@ -160,7 +161,7 @@ export default function DashboardScreen() {
   };
 
   const renderStatCard = (stat: Stat, index: number) => (
-    <Card key={stat.label} style={[styles.statCard, { width: CARD_WIDTH }]}>
+    <Card key={stat.label} style={[styles.statCard, { width: CARD_WIDTH }] as any}>
       <CardContent style={styles.statCardContent}>
         <View style={styles.statHeader}>
           <View
@@ -168,19 +169,24 @@ export default function DashboardScreen() {
               styles.statIconContainer,
               { backgroundColor: stat.color + '20' },
             ]}>
-            <Text style={styles.statIcon}>{stat.icon}</Text>
+            <Icon name={stat.icon} size={20} color={stat.color} />
           </View>
           <View style={styles.statInfo}>
             <Text style={styles.statLabel}>{stat.label}</Text>
             <Text style={styles.statValue}>{stat.value}</Text>
             {stat.change !== 0 && (
               <View style={styles.statChange}>
+                <Icon
+                  name={stat.change > 0 ? 'arrow-up' : 'arrow-down'}
+                  size={12}
+                  color={stat.change > 0 ? '#10b981' : '#ef4444'}
+                />
                 <Text
                   style={[
                     styles.statChangeText,
                     { color: stat.change > 0 ? '#10b981' : '#ef4444' },
                   ]}>
-                  {stat.change > 0 ? '↑' : '↓'} {Math.abs(stat.change)}%
+                  {' '}{Math.abs(stat.change)}%
                 </Text>
               </View>
             )}
@@ -202,11 +208,11 @@ export default function DashboardScreen() {
             onPress={() => {
               // TODO: Show date range picker
             }}>
-            <Text style={styles.controlButtonIcon}>📅</Text>
+            <Icon name="calendar" size={16} color={Colors.foreground} />
             <Text style={styles.controlButtonText} numberOfLines={1}>
               {dateRangeText}
             </Text>
-            <Text style={styles.controlButtonChevron}>▼</Text>
+            <Icon name="chevron-down" size={14} color={Colors.mutedForeground} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -214,11 +220,11 @@ export default function DashboardScreen() {
             onPress={() => {
               // TODO: Show compare mode picker
             }}>
-            <Text style={styles.controlButtonIcon}>📊</Text>
+            <Icon name="chart-bar" size={16} color={Colors.foreground} />
             <Text style={styles.controlButtonText} numberOfLines={1}>
               {getCompareLabel()}
             </Text>
-            <Text style={styles.controlButtonChevron}>▼</Text>
+            <Icon name="chevron-down" size={14} color={Colors.mutedForeground} />
           </TouchableOpacity>
         </View>
 
@@ -260,7 +266,7 @@ export default function DashboardScreen() {
           <CardContent>
             <View style={styles.reviewsHeader}>
               <View style={styles.reviewsIconContainer}>
-                <Text style={styles.reviewsIcon}>👍</Text>
+                <Icon name="thumb-up" size={20} color="#f59e0b" />
               </View>
               <View style={styles.reviewsInfo}>
                 <Text style={styles.reviewsTitle}>Reviews</Text>
@@ -309,25 +315,25 @@ export default function DashboardScreen() {
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() => navigation.navigate('JobsList' as any)}>
-              <Text style={styles.quickActionIcon}>💼</Text>
+              <Icon name="briefcase-outline" size={32} color={Colors.foreground} />
               <Text style={styles.quickActionLabel}>View Jobs</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() => navigation.navigate('Schedule' as any)}>
-              <Text style={styles.quickActionIcon}>📅</Text>
+              <Icon name="calendar-outline" size={32} color={Colors.foreground} />
               <Text style={styles.quickActionLabel}>Schedule</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() => navigation.navigate('Earnings' as any)}>
-              <Text style={styles.quickActionIcon}>💰</Text>
+              <Icon name="cash-multiple" size={32} color={Colors.foreground} />
               <Text style={styles.quickActionLabel}>Earnings</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() => navigation.navigate('ChatList' as any)}>
-              <Text style={styles.quickActionIcon}>💬</Text>
+              <Icon name="message-text-outline" size={32} color={Colors.foreground} />
               <Text style={styles.quickActionLabel}>Messages</Text>
             </TouchableOpacity>
           </View>

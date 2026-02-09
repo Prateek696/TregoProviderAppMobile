@@ -11,8 +11,10 @@ import {
   ViewStyle,
   TextStyle,
   ActivityIndicator,
+  StyleProp,
 } from 'react-native';
 import { Colors } from '../../shared/constants/colors';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 export type ButtonVariant = 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
 export type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
@@ -24,9 +26,10 @@ export interface ButtonProps {
   size?: ButtonSize;
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   testID?: string;
+  icon?: string;
 }
 
 export function Button({
@@ -39,6 +42,7 @@ export function Button({
   style,
   textStyle,
   testID,
+  icon,
 }: ButtonProps) {
   const buttonStyle = [
     styles.base,
@@ -69,7 +73,10 @@ export function Button({
           color={variant === 'outline' || variant === 'ghost' ? Colors.primary : Colors.primaryForeground}
         />
       ) : (
-        <Text style={buttonTextStyle}>{title}</Text>
+        <>
+          <Text style={buttonTextStyle}>{title}</Text>
+          {icon && <Icon name={icon} size={16} color={(buttonTextStyle as any)[1]?.color || (buttonTextStyle as any)[0]?.color || '#fff'} style={{ marginLeft: 8 }} />}
+        </>
       )}
     </TouchableOpacity>
   );
@@ -136,6 +143,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
+  iconText: {},
   defaultText: {
     color: Colors.primaryForeground,
   },
