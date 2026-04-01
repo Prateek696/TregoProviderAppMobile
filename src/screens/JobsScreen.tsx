@@ -15,13 +15,19 @@ import {
   StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
 import { TregoLogo } from '../components/TregoLogo';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
-import { fullWeekDemoJobs } from '../shared/data/fullWeekJobsData';
 import AddJobModal from '../components/AddJobModal';
+import VoiceBubble from '../components/VoiceBubble';
+import { jobsAPI } from '../services/api';
+import { mapBackendJob } from '../services/jobActions';
+import { startOfflineSyncListener } from '../services/offlineQueue';
+import { checkForPostCallPrompt, requestCallLogPermission } from '../services/callLog';
+import { onForegroundMessage } from '../services/notifications';
+import { Modal, Alert } from 'react-native';
 
 type JobsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobsList'>;
 
@@ -70,40 +76,73 @@ const COLORS = {
 
 export default function JobsScreen() {
   const navigation = useNavigation<JobsScreenNavigationProp>();
-  const [jobs, setJobs] = useState<Job[]>(fullWeekDemoJobs as Job[]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasEverHadJobs, setHasEverHadJobs] = useState<boolean | null>(null);
   const [filter, setFilter] = useState<FilterType>('week');
   const [orbColor, setOrbColor] = useState(COLORS.accent);
   const [selectedDayOffset, setSelectedDayOffset] = useState(0);
   const [isAddJobModalVisible, setIsAddJobModalVisible] = useState(false);
+  const [postCallClient, setPostCallClient] = useState<string | null>(null);
+  const lastCallCheckRef = React.useRef(Date.now());
 
-  const handleJobCreated = (newJob: any) => {
-    // Convert modal job format to internal Job format if necessary
-    // For now, we will add it to the filtered list logic by updating the main jobs state
-    // Ensure IDs don't conflict
-    const mappedJob: Job = {
-      id: newJob.id,
-      title: newJob.description,
-      description: newJob.notes || newJob.description,
-      client: newJob.client.firstName + ' ' + newJob.client.lastName,
-      clientRating: 5.0, // Default for new
-      location: 'Lisbon, Portugal', // Default
-      address: newJob.client.address || 'No address',
-      status: 'confirmed',
-      priority: 'medium',
-      category: newJob.jobType,
-      jobType: newJob.jobType,
-      scheduledDate: newJob.date, // "YYYY-MM-DD"
-      scheduledTime: newJob.time,
-      estimatedPrice: '€' + newJob.price,
-    };
-
-    // Update state
-    setJobs(prevJobs => [...prevJobs, mappedJob]);
-  };
+  // Load jobs + check post-call every time screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      loadJobs();
+      checkPostCall();
+      // Start offline sync listener — when internet returns, auto-sync queued audio
+      const unsub = startOfflineSyncListener((count) => {
+        console.log(`[OfflineSync] ${count} job(s) synced`);
+        loadJobs(); // refresh list after sync
+      });
+      return () => unsub();
+    }, [])
+  );
 
   useEffect(() => {
     loadSettings();
+    // Poll for AI processing updates every 8 seconds
+    const poll = setInterval(() => loadJobs(), 8000);
+    // Refresh on foreground push (job_created / job_updated)
+    const unsubPush = onForegroundMessage((payload) => {
+      if (payload.type === 'job_created' || payload.type === 'job_updated') {
+        loadJobs();
+      }
+    });
+    return () => {
+      clearInterval(poll);
+      unsubPush();
+    };
   }, []);
+
+  const checkPostCall = async () => {
+    const permitted = await requestCallLogPermission();
+    if (!permitted) return;
+    const call = await checkForPostCallPrompt(30, lastCallCheckRef.current);
+    if (call) {
+      lastCallCheckRef.current = Date.now();
+      setPostCallClient(call.name !== 'Unknown' ? call.name : call.phoneNumber);
+    }
+  };
+
+  const loadJobs = async () => {
+    try {
+      const res = await jobsAPI.list();
+      const mapped = res.data.jobs.map(mapBackendJob) as Job[];
+      setJobs(mapped);
+      setHasEverHadJobs(mapped.length > 0);
+    } catch (err) {
+      console.error('Failed to load jobs:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleJobCreated = (newJob: any) => {
+    // Add the raw job immediately to the top of the list while AI processes
+    setJobs(prev => [mapBackendJob(newJob) as Job, ...prev]);
+  };
 
   const loadSettings = async () => {
     try {
@@ -218,7 +257,8 @@ export default function JobsScreen() {
     };
   };
 
-  const getBorderColor = (status: string): string => {
+  const getBorderColor = (status: string, priority?: string): string => {
+    if (priority === 'urgent') return COLORS.danger;
     if (status === 'paused') return COLORS.danger;
     if (status === 'delayed') return COLORS.purple;
     if (status === 'confirmed') return COLORS.info;
@@ -336,14 +376,25 @@ export default function JobsScreen() {
   const renderStandardJobCard = (job: Job) => {
     const isConfirmed = job.status === 'confirmed';
     const isPending = job.status === 'pending';
+    const isUrgent = job.priority === 'urgent';
 
     return (
-      <View key={job.id} style={styles.standardCard}>
+      <View key={job.id} style={[
+        styles.standardCard,
+        isUrgent && { borderColor: COLORS.danger, borderWidth: 1.5 },
+      ]}>
         <View style={styles.standardHeader}>
-          <View style={[styles.standardStatusBadge, isPending && styles.statusBadgePending]}>
-            <Text style={[styles.standardStatusText, isPending && styles.statusTextPending]}>
-              {job.status.toUpperCase()}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {isUrgent && (
+              <View style={styles.urgentBadge}>
+                <Text style={styles.urgentBadgeText}>URGENT</Text>
+              </View>
+            )}
+            <View style={[styles.standardStatusBadge, isPending && styles.statusBadgePending]}>
+              <Text style={[styles.standardStatusText, isPending && styles.statusTextPending]}>
+                {job.status.toUpperCase()}
+              </Text>
+            </View>
           </View>
           <Text style={styles.standardTimeText}>{job.scheduledTime}</Text>
         </View>
@@ -475,10 +526,21 @@ export default function JobsScreen() {
 
 
         {filteredJobs.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Icon name="briefcase-outline" size={48} color={COLORS.textSecondary} />
-            <Text style={styles.emptyStateText}>No jobs found</Text>
-          </View>
+          hasEverHadJobs === false ? (
+            // 4.4 — First-time empty screen
+            <View style={styles.firstTimeCard}>
+              <Icon name="microphone-outline" size={48} color={orbColor} />
+              <Text style={styles.firstTimeTitle}>Try it now</Text>
+              <Text style={styles.firstTimeBody}>
+                Tap and hold the button below, then say your next job.{'\n'}Speak naturally — Trego handles the rest.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Icon name="briefcase-outline" size={48} color={COLORS.textSecondary} />
+              <Text style={styles.emptyStateText}>No jobs found</Text>
+            </View>
+          )
         ) : (
           <>
             {/* Pinned Jobs Section */}
@@ -521,19 +583,49 @@ export default function JobsScreen() {
 
 
 
-      <TouchableOpacity
-        style={[styles.floatingAddButton, { backgroundColor: orbColor }]}
-        onPress={() => setIsAddJobModalVisible(true)}
-      >
-        <Icon name="plus" size={24} color="#ffffff" />
-        <Text style={styles.floatingAddText}>Add Job</Text>
-      </TouchableOpacity>
+      {/* Voice Bubble — hold to speak, release to submit */}
+      <View style={styles.bubbleWrapper}>
+        <VoiceBubble onJobCreated={handleJobCreated} />
+      </View>
 
       <AddJobModal
         visible={isAddJobModalVisible}
         onClose={() => setIsAddJobModalVisible(false)}
         onJobCreated={handleJobCreated}
       />
+
+      {/* Post-call capture prompt */}
+      {postCallClient !== null && (
+        <Modal transparent animationType="slide" onRequestClose={() => setPostCallClient(null)}>
+          <View style={styles.postCallOverlay}>
+            <View style={styles.postCallCard}>
+              <Icon name="phone-check" size={32} color="#10b981" />
+              <Text style={styles.postCallTitle}>Just finished a call?</Text>
+              <Text style={styles.postCallSubtitle}>
+                You had a call with {postCallClient}. Create a job from it?
+              </Text>
+              <View style={styles.postCallButtons}>
+                <TouchableOpacity
+                  style={styles.postCallDismiss}
+                  onPress={() => setPostCallClient(null)}>
+                  <Text style={{ color: '#94a3b8', fontSize: 15 }}>Dismiss</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.postCallCreate}
+                  onPress={() => {
+                    const client = postCallClient;
+                    setPostCallClient(null);
+                    // Open VoiceBubble pre-filled with client name
+                    // For now show the AddJob modal with client pre-filled via context
+                    setIsAddJobModalVisible(true);
+                  }}>
+                  <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Create Job</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -844,6 +936,99 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
+  // 4.4 — First-time empty screen
+  firstTimeCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  firstTimeTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  firstTimeBody: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  // 4.6 — Urgent badge
+  urgentBadge: {
+    backgroundColor: '#7f1d1d',
+    borderColor: '#ef4444',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  urgentBadgeText: {
+    color: '#fca5a5',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  bubbleWrapper: {
+    position: 'absolute',
+    bottom: 28,
+    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  postCallOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  postCallCard: {
+    backgroundColor: '#1e293b',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 28,
+    paddingBottom: 48,
+    alignItems: 'center',
+    gap: 12,
+  },
+  postCallTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#f1f5f9',
+  },
+  postCallSubtitle: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  postCallButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+    width: '100%',
+  },
+  postCallDismiss: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  postCallCreate: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: '#10b981',
+  },
   floatingAddButton: {
     position: 'absolute',
     bottom: 20,

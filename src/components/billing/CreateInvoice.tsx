@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { Button } from '../ui/Button';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { Picker } from '@react-native-picker/picker'; // Ensure this package is installed or use a custom select
-import { mockClients } from '../../shared/data/billingData';
+import { Picker } from '@react-native-picker/picker';
+import { contactsAPI } from '../../services/api';
 import { Invoice, InvoiceLine, Client } from '../../shared/types/billingTypes';
 import { saveInvoice } from '../../shared/utils/billingStorage';
 
@@ -26,6 +26,20 @@ interface CreateInvoiceProps {
 
 export default function CreateInvoice({ onBack }: CreateInvoiceProps) {
     const [loading, setLoading] = useState(false);
+    const [clients, setClients] = useState<Client[]>([]);
+
+    useEffect(() => {
+        contactsAPI.list().then(res => {
+            setClients(res.data.contacts.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                nif: c.nif || '',
+                email: c.email || '',
+                phone: c.phone || c.phones?.[0]?.number || '',
+                address: c.address || '',
+            })));
+        }).catch(() => {});
+    }, []);
 
     // Invoice Details
     const [selectedClientId, setSelectedClientId] = useState('');
@@ -110,7 +124,7 @@ export default function CreateInvoice({ onBack }: CreateInvoiceProps) {
         setLoading(true);
 
         try {
-            const client = mockClients.find(c => c.id === selectedClientId) as Client;
+            const client = clients.find(c => c.id === selectedClientId) as Client;
 
             const newInvoice: Invoice = {
                 id: Date.now().toString(),
@@ -161,7 +175,7 @@ export default function CreateInvoice({ onBack }: CreateInvoiceProps) {
                             selectedValue={selectedClientId}
                             onValueChange={setSelectedClientId}>
                             <Picker.Item label="Select Client..." value="" />
-                            {mockClients.map(client => (
+                            {clients.map(client => (
                                 <Picker.Item key={client.id} label={client.name} value={client.id} />
                             ))}
                         </Picker>

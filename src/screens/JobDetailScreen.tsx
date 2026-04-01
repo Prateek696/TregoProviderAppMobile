@@ -3,7 +3,7 @@
  * Migrated from web app's JobDetailModal
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import { Alert } from 'react-native';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -31,7 +33,9 @@ import {
   resumeJob,
   completeJob,
   cancelJob,
-} from '../shared/services/jobActions';
+  mapBackendJob,
+} from '../services/jobActions';
+import { jobsAPI } from '../services/api';
 import { PauseJobModal, CancelJobModal, CompleteJobModal } from '../components/modals';
 
 type JobDetailScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobDetail'>;
@@ -45,11 +49,18 @@ export default function JobDetailScreen() {
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     loadSettings();
-    loadJob();
-  }, [jobId]);
+  }, []);
+
+  // Reload job whenever screen is focused (e.g. returning from JobEdit)
+  useFocusEffect(
+    useCallback(() => {
+      loadJob();
+    }, [jobId])
+  );
 
   const loadSettings = async () => {
     try {
@@ -60,38 +71,45 @@ export default function JobDetailScreen() {
     }
   };
 
+  const handleAddPhoto = () => {
+    Alert.alert('Add Photo', 'Choose source', [
+      {
+        text: 'Camera',
+        onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+          if (res.assets?.[0]?.uri) {
+            await uploadPhoto(res.assets[0].uri);
+          }
+        }),
+      },
+      {
+        text: 'Gallery',
+        onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+          if (res.assets?.[0]?.uri) {
+            await uploadPhoto(res.assets[0].uri);
+          }
+        }),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const uploadPhoto = async (uri: string) => {
+    if (!job) return;
+    setUploadingPhoto(true);
+    try {
+      await jobsAPI.uploadPhoto(job.id, uri);
+      await loadJob();
+    } catch (err) {
+      Alert.alert('Upload Failed', 'Could not upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const loadJob = async () => {
     try {
-      // In real app, load from AsyncStorage or API
-      // For now, use mock data
-      const storedJobs = await jsonStorage.getItem<Job[]>(STORAGE_KEYS.JOBS);
-      if (storedJobs) {
-        const foundJob = storedJobs.find(j => j.id === jobId);
-        if (foundJob) {
-          setJob(foundJob);
-          return;
-        }
-      }
-      // Fallback to mock
-      const mockJob: Job = {
-        id: jobId,
-        title: 'Kitchen Faucet Repair',
-        description: 'Leaky faucet needs replacement. Client reports water leaking from base.',
-        client: 'Ana Silva',
-        clientRating: 4.8,
-        location: '1.2 km away',
-        address: 'Rua das Flores, 45, Lisboa',
-        bidAmount: '€180',
-        scheduledTime: '10:00 AM',
-        scheduledDate: new Date().toISOString(),
-        estimatedDuration: '2 hours',
-        status: 'confirmed',
-        priority: 'normal',
-        category: 'Plumbing',
-        jobType: 'fixed',
-        phoneNumber: '+351 912 345 678',
-      };
-      setJob(mockJob);
+      const res = await jobsAPI.get(jobId);
+      setJob(mapBackendJob(res.data.job) as Job);
     } catch (error) {
       console.error('Error loading job:', error);
     }
@@ -166,7 +184,16 @@ export default function JobDetailScreen() {
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Job Details</Text>
-        <View style={styles.headerSpacer} />
+        {job.status !== 'completed' && job.status !== 'cancelled' ? (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('JobEdit', { jobId: job.id })}
+            style={styles.editButton}>
+            <Icon name="pencil-outline" size={18} color={orbColor} />
+            <Text style={[styles.editButtonText, { color: orbColor }]}>Edit</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <ScrollView
@@ -338,11 +365,9 @@ export default function JobDetailScreen() {
                 style={styles.actionButton}
               />
               <Button
-                title="Add Expense"
+                title={uploadingPhoto ? 'Uploading...' : 'Add Photo'}
                 variant="outline"
-                onPress={() => {
-                  // TODO: Navigate to add expense
-                }}
+                onPress={handleAddPhoto}
                 style={styles.actionButton}
               />
               <Button
@@ -376,8 +401,14 @@ export default function JobDetailScreen() {
               />
               <Button
                 title="Create Invoice"
-                onPress={() => {
-                  // TODO: Navigate to create invoice
+                onPress={async () => {
+                  try {
+                    await jobsAPI.bill(job.id);
+                    Alert.alert('Invoice Created', 'Moloni invoice issued successfully.');
+                    await loadJob();
+                  } catch (err: any) {
+                    Alert.alert('Invoice Failed', err?.message || 'Could not create invoice.');
+                  }
                 }}
                 style={[styles.actionButton, { backgroundColor: orbColor }]}
               />
@@ -420,9 +451,9 @@ export default function JobDetailScreen() {
       <CompleteJobModal
         visible={showCompleteModal}
         onClose={() => setShowCompleteModal(false)}
-        onConfirm={async (finalPrice) => {
+        onConfirm={async ({ finalPrice, paymentReceived, cashAmount }) => {
           if (job) {
-            const result = await completeJob(job.id, finalPrice);
+            const result = await completeJob(job.id, finalPrice, paymentReceived, cashAmount);
             if (result.success) {
               await loadJob();
             }
@@ -468,6 +499,17 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 60,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    width: 60,
+    justifyContent: 'flex-end',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,

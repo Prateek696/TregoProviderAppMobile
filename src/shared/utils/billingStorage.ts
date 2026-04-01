@@ -5,7 +5,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Expense, Invoice, Client, ItemData } from '../types/billingTypes';
-import { mockExpenses, mockInvoices, mockClients, mockItems } from '../data/billingData';
+import { mockItems } from '../data/billingData';
 
 // Storage keys
 const KEYS = {
@@ -21,15 +21,11 @@ const KEYS = {
 export async function loadExpenses(): Promise<Expense[]> {
     try {
         const stored = await AsyncStorage.getItem(KEYS.EXPENSES);
-        if (stored) {
-            return JSON.parse(stored);
-        }
-        // Return mock data on first load
-        await saveExpenses(mockExpenses);
-        return mockExpenses;
+        if (stored) return JSON.parse(stored);
+        return [];
     } catch (error) {
         console.error('Error loading expenses:', error);
-        return mockExpenses;
+        return [];
     }
 }
 
@@ -72,15 +68,11 @@ export async function deleteExpense(expenseId: string): Promise<void> {
 export async function loadInvoices(): Promise<Invoice[]> {
     try {
         const stored = await AsyncStorage.getItem(KEYS.INVOICES);
-        if (stored) {
-            return JSON.parse(stored);
-        }
-        // Return mock data on first load
-        await saveInvoices(mockInvoices);
-        return mockInvoices;
+        if (stored) return JSON.parse(stored);
+        return [];
     } catch (error) {
         console.error('Error loading invoices:', error);
-        return mockInvoices;
+        return [];
     }
 }
 
@@ -123,15 +115,11 @@ export async function deleteInvoice(invoiceId: string): Promise<void> {
 export async function loadClients(): Promise<Client[]> {
     try {
         const stored = await AsyncStorage.getItem(KEYS.CLIENTS);
-        if (stored) {
-            return JSON.parse(stored);
-        }
-        // Return mock data on first load
-        await saveClients(mockClients);
-        return mockClients;
+        if (stored) return JSON.parse(stored);
+        return [];
     } catch (error) {
         console.error('Error loading clients:', error);
-        return mockClients;
+        return [];
     }
 }
 

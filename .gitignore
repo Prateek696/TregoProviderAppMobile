@@ -78,3 +78,4 @@ yarn-error.log
 build_log*.txt
 gradle_error*.txt
 gradle_nodaemon.txt
+backend/.env

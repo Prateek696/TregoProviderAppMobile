@@ -1,6 +1,6 @@
 /**
  * Complete Job Modal
- * For completing a job with optional final price
+ * For completing a job with optional final price and cash payment logging (3.4).
  */
 
 import React, { useState } from 'react';
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Modal,
   TextInput,
+  Switch,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -17,10 +18,16 @@ import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Colors } from '../../shared/constants/colors';
 
+export interface CompleteJobResult {
+  finalPrice?: string;
+  paymentReceived: boolean;
+  cashAmount?: string;
+}
+
 interface CompleteJobModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (finalPrice?: string) => void;
+  onConfirm: (result: CompleteJobResult) => void;
   jobTitle?: string;
   estimatedPrice?: string;
 }
@@ -33,15 +40,27 @@ export function CompleteJobModal({
   estimatedPrice,
 }: CompleteJobModalProps) {
   const [finalPrice, setFinalPrice] = useState(estimatedPrice || '');
+  const [paymentReceived, setPaymentReceived] = useState(false);
+  const [cashAmount, setCashAmount] = useState(estimatedPrice || '');
 
   const handleConfirm = () => {
-    onConfirm(finalPrice.trim() || undefined);
-    setFinalPrice('');
+    onConfirm({
+      finalPrice: finalPrice.trim() || undefined,
+      paymentReceived,
+      cashAmount: paymentReceived ? (cashAmount.trim() || undefined) : undefined,
+    });
+    resetState();
   };
 
   const handleClose = () => {
-    setFinalPrice(estimatedPrice || '');
+    resetState();
     onClose();
+  };
+
+  const resetState = () => {
+    setFinalPrice(estimatedPrice || '');
+    setPaymentReceived(false);
+    setCashAmount(estimatedPrice || '');
   };
 
   return (
@@ -60,9 +79,10 @@ export function CompleteJobModal({
               <Text style={styles.subtitle}>{jobTitle}</Text>
             )}
             <Text style={styles.description}>
-              Mark this job as completed. You can update the final price if it differs from the estimate.
+              Mark this job as completed. Update the final price if it differs from the estimate.
             </Text>
 
+            {/* Final price */}
             <View style={styles.inputContainer}>
               <Label>Final Price (Optional)</Label>
               <TextInput
@@ -74,11 +94,38 @@ export function CompleteJobModal({
                 placeholderTextColor={Colors.mutedForeground}
               />
               {estimatedPrice && (
-                <Text style={styles.hint}>
-                  Estimated: {estimatedPrice}
-                </Text>
+                <Text style={styles.hint}>Estimated: €{estimatedPrice}</Text>
               )}
             </View>
+
+            {/* Payment received toggle (3.4) */}
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleLabelGroup}>
+                <Text style={styles.toggleLabel}>Payment received</Text>
+                <Text style={styles.toggleHint}>Record a cash or immediate payment</Text>
+              </View>
+              <Switch
+                value={paymentReceived}
+                onValueChange={setPaymentReceived}
+                trackColor={{ false: Colors.border, true: '#10b981' }}
+                thumbColor={paymentReceived ? '#fff' : '#9ca3af'}
+              />
+            </View>
+
+            {paymentReceived && (
+              <View style={styles.inputContainer}>
+                <Label>Amount Received</Label>
+                <TextInput
+                  style={styles.input}
+                  placeholder={finalPrice || estimatedPrice || 'Enter amount...'}
+                  value={cashAmount}
+                  onChangeText={setCashAmount}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={Colors.mutedForeground}
+                  autoFocus
+                />
+              </View>
+            )}
 
             <View style={styles.actions}>
               <Button
@@ -150,6 +197,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.mutedForeground,
   },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  toggleLabelGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.foreground,
+  },
+  toggleHint: {
+    fontSize: 12,
+    color: Colors.mutedForeground,
+  },
   actions: {
     flexDirection: 'row',
     gap: 12,
@@ -160,5 +226,3 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
 });
-
-

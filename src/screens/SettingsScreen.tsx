@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
+import { profileAPI, getAPIError } from '../services/api';
 
 type SettingsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'Settings'>;
 type SettingSection = 'main' | 'account' | 'assistant' | 'app' | 'billing' | 'privacy' | 'legal' | 'help';
@@ -56,6 +57,11 @@ export default function SettingsScreen() {
   const [showTutorial, setShowTutorial] = useState(true);
   const [voiceMessages, setVoiceMessages] = useState(true);
   const [typingAnimation, setTypingAnimation] = useState(true);
+  // AI settings from backend
+  const [digestEnabled, setDigestEnabled] = useState(true);
+  const [postCallThreshold, setPostCallThreshold] = useState(30); // seconds
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // Billing State
   const [autoRecharge, setAutoRecharge] = useState(false);
@@ -70,9 +76,25 @@ export default function SettingsScreen() {
       const color = await jsonStorage.getItem(STORAGE_KEYS.ORB_COLOR);
       if (color) setOrbColor(color as string);
 
-      // Load other settings from storage as needed
+      // Load backend settings
+      const res = await profileAPI.get();
+      const settings = res.data?.provider?.settings || {};
+      if (typeof settings.digest_enabled === 'boolean') setDigestEnabled(settings.digest_enabled);
+      if (typeof settings.post_call_threshold === 'number') setPostCallThreshold(settings.post_call_threshold);
+      if (typeof settings.quiet_hours_enabled === 'boolean') setQuietHoursEnabled(settings.quiet_hours_enabled);
     } catch (error) {
       console.error('Error loading settings:', error);
+    }
+  };
+
+  const saveBackendSettings = async (patch: { digest_enabled?: boolean; post_call_threshold?: number; quiet_hours_enabled?: boolean }) => {
+    setSavingSettings(true);
+    try {
+      await profileAPI.update(patch as any);
+    } catch (err) {
+      console.error('Failed to save settings:', getAPIError(err));
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -285,6 +307,57 @@ export default function SettingsScreen() {
         {renderToggleItem('Voice Messages', 'Enable voice recording', voiceMessages, setVoiceMessages)}
         <View style={styles.separator} />
         {renderToggleItem('Typing Animations', 'Character reveal effect', typingAnimation, setTypingAnimation)}
+      </View>
+
+      <Text style={styles.subSectionHeader}>Job Automation</Text>
+      <View style={styles.cardDark}>
+        {renderToggleItem(
+          'Daily Digest',
+          'Receive end-of-day job summary (19:00 PT)',
+          digestEnabled,
+          (val) => {
+            setDigestEnabled(val);
+            saveBackendSettings({ digest_enabled: val });
+          }
+        )}
+        <View style={styles.separator} />
+        {renderToggleItem(
+          'Quiet Hours (21:00 – 07:00)',
+          'No non-critical notifications during these hours',
+          quietHoursEnabled,
+          (val) => {
+            setQuietHoursEnabled(val);
+            saveBackendSettings({ quiet_hours_enabled: val });
+          }
+        )}
+        <View style={styles.separator} />
+        <View style={styles.toggleItem}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.toggleLabel}>Post-Call Prompt</Text>
+            <Text style={styles.toggleSubtitle}>Trigger after calls longer than {postCallThreshold}s</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={styles.stepBtn}
+              onPress={() => {
+                const v = Math.max(10, postCallThreshold - 10);
+                setPostCallThreshold(v);
+                saveBackendSettings({ post_call_threshold: v });
+              }}>
+              <Icon name="minus" size={16} color={orbColor} />
+            </TouchableOpacity>
+            <Text style={[styles.toggleLabel, { minWidth: 32, textAlign: 'center' }]}>{postCallThreshold}s</Text>
+            <TouchableOpacity
+              style={styles.stepBtn}
+              onPress={() => {
+                const v = Math.min(120, postCallThreshold + 10);
+                setPostCallThreshold(v);
+                saveBackendSettings({ post_call_threshold: v });
+              }}>
+              <Icon name="plus" size={16} color={orbColor} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       <Text style={styles.subSectionHeader}>Current Configuration</Text>
@@ -890,6 +963,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#fff',
+  },
+  stepBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconBox: {
     width: 40,
