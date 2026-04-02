@@ -19,7 +19,7 @@ router.put(
   '/',
   auth,
   body('name').optional().isString().trim().notEmpty(),
-  body('trade').optional().isIn(['plumber', 'electrician', 'carpenter', 'other']),
+  body('trade').optional().isString().trim().notEmpty(),
   body('nif').optional().isLength({ min: 9, max: 9 }).isNumeric(),
   body('fcm_token').optional().isString(),
   async (req, res, next) => {

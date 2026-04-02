@@ -258,7 +258,6 @@ export default function CalendarSyncScreen({
         {connected && selectedOption === 'google' && events.length === 0 && !isLoading && (
           <View style={styles.previewContainer}>
             <Text style={styles.previewTitle}>✓ Google Calendar Connected</Text>
-            <Text style={styles.previewDescription}>No upcoming events in the next 14 days.</Text>
           </View>
         )}
       </ScrollView>
