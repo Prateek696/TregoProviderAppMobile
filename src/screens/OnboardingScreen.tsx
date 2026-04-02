@@ -375,8 +375,11 @@ export default function OnboardingScreen() {
           last_name: personalInfo?.lastName || undefined,
           trade: selectedServices[0] || undefined,
           nif: personalInfo?.vatNif || undefined,
+          country_code: personalInfo?.countryCode || undefined,
+          assistant_name: assistantName || undefined,
+          orb_color: orbColor || undefined,
           // All 3 services
-          services: selectedServices.map((s, i) => ({ name: s, category: null })),
+          services: selectedServices.map((s) => ({ name: s, category: null })),
           // Base locations
           locations: baseLocations.map(loc => ({
             nickname: loc.nickname,
@@ -391,6 +394,18 @@ export default function OnboardingScreen() {
           coverage_unlimited: hasUnlimitedCoverage,
           coverage_mode: coverageMode === 'distance' ? 'radius' : 'city',
           coverage_cities: coverageMode === 'city' ? selectedCities : [],
+          // Calendar
+          calendar_connected: calendarSync?.calendarConnected ?? false,
+          calendar_provider: calendarSync?.calendarProvider || undefined,
+          // Billing
+          billing: billingInfo ? {
+            name: billingInfo.name,
+            vat: billingInfo.vat,
+            address: billingInfo.address,
+            city: billingInfo.city,
+            postalCode: billingInfo.postalCode,
+            usePersonalInfo: billingInfo.usePersonalInfo,
+          } : undefined,
         } as any);
       } catch (e) {
         console.warn('Onboarding: failed to sync profile to backend', e);
