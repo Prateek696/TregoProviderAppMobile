@@ -23,6 +23,7 @@ import { Label } from '../components/ui/Label';
 import { Card, CardContent } from '../components/ui/Card';
 import { Colors } from '../shared/constants/colors';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
+import { profileAPI } from '../services/api';
 import { StartupOrb } from '../components/StartupOrb';
 import WorkingHoursScreen, { WorkingHours } from './WorkingHoursScreen';
 import PersonalInformationScreen from './PersonalInformationScreen';
@@ -353,6 +354,16 @@ export default function OnboardingScreen() {
         await jsonStorage.setItem('trego-provider-working-hours', JSON.stringify(workingHours));
       }
       await jsonStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, true);
+
+      // Persist to backend — best effort (don't block navigation if it fails)
+      try {
+        await profileAPI.update({
+          name: firstName,
+          trade: selectedServices[0] || undefined,
+        });
+      } catch (e) {
+        console.warn('Onboarding: failed to sync profile to backend', e);
+      }
 
       // Navigate to main app
       navigation.replace('Main');
