@@ -83,7 +83,7 @@ router.get('/', auth, async (req, res, next) => {
        FROM jobs j
        LEFT JOIN clients c ON j.client_id = c.id
        WHERE j.provider_id = $1
-         AND j.status != 'discarded'
+         AND j.status != 'discarded' AND j.exec_status != 'cancelled'
        ORDER BY j.created_at DESC`,
       [req.provider.id]
     );
