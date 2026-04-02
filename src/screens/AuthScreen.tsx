@@ -503,20 +503,14 @@ export default function AuthScreen() {
       <View style={styles.form}>
         <View style={styles.inputGroup}>
           <Label style={styles.otpLabel}>Verification Code</Label>
-          <View style={styles.otpContainer}>
-            {[0, 1, 2, 3, 4, 5].map((index) => (
-              <View key={index} style={styles.otpBox}>
-                <Text style={styles.otpText}>{otp[index] || ''}</Text>
-              </View>
-            ))}
-          </View>
           <Input
             value={otp}
             onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, '').slice(0, 6))}
             keyboardType="number-pad"
             maxLength={6}
-            style={styles.hiddenInput}
             autoFocus
+            placeholder="------"
+            style={styles.otpSingleInput}
           />
         </View>
 
@@ -929,33 +923,12 @@ const styles = StyleSheet.create({
   otpLabel: {
     textAlign: 'center',
   },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  otpBox: {
-    width: 48,
-    height: 56,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#4b5563', // Dark border for dark theme
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#374151', // Dark background for OTP boxes
-  },
-  otpText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#f3f4f6', // Light text for dark theme
-    letterSpacing: 4,
-  },
-  hiddenInput: {
-    position: 'absolute',
-    width: 0,
-    height: 0,
-    opacity: 0,
+  otpSingleInput: {
+    textAlign: 'center',
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 12,
+    height: 64,
   },
   resendButton: {
     alignItems: 'center',
