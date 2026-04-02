@@ -1,0 +1,199 @@
+================================================================================
+TREGO MVP — BUILD STATUS
+Last updated: April 1, 2026
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ DONE — BACKEND
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [x] Auth — Phone OTP via Twilio + JWT token
+  [x] Provider profile — GET /api/profile, PUT /api/profile
+  [x] Jobs CRUD — GET/POST/PUT /api/jobs, all fields (title, description,
+      category, priority, address, price, exec_status, photo_url, etc.)
+  [x] Voice intake — POST /api/jobs/voice → Groq Whisper transcription
+  [x] AI parser — Groq llama-3.1-8b-instant extracts job fields from text/voice
+  [x] Exec status lifecycle — pending → confirmed → en-route → on-site →
+      paused → completed → cancelled (with timestamps)
+  [x] Photo upload — POST /api/jobs/:id/photo → Cloudinary
+  [x] Moloni invoicing — POST /api/jobs/:id/bill → real Moloni invoice
+  [x] Contacts sync — POST /api/contacts/sync (bulk phone contact import)
+  [x] Contacts CRUD — GET/POST/PUT /api/contacts
+  [x] Offline sync — POST /api/jobs/sync (processes queued offline audio)
+  [x] End-of-day digest — cron at 18:00 UTC (19:00 Portugal), sends FCM push
+  [x] Firebase push notifications service (sends to provider FCM token)
+  [x] WhatsApp webhook scaffold — GET/POST /api/whatsapp (pending Meta approval)
+  [x] Recurring job detection — AI parser checks DB for similar past jobs
+  [x] DB schema v2 — jobs, clients, contact_phones, contact_emails, invoices,
+      invoice_lines, provider_settings tables
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ DONE — MOBILE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [x] Auth screen → real phone OTP (send + verify hits backend)
+  [x] Jobs screen → real API, live polling every 8s for AI updates
+  [x] Job detail screen → real API
+  [x] Job edit screen → PUT /api/jobs/:id (all fields editable)
+  [x] Calendar screen → real jobs grouped by date
+  [x] Contacts screen → READ_CONTACTS permission + sync to backend
+  [x] Voice bubble → hold-to-speak, uploads to POST /api/jobs/voice
+  [x] Offline audio queue → saves to device if no internet, auto-syncs on reconnect
+  [x] Photo attachment → camera/gallery picker → POST /api/jobs/:id/photo
+  [x] Create Invoice button → POST /api/jobs/:id/bill
+  [x] All job status states mapped correctly (pending/confirmed/en-route/
+      on-site/paused/completed/cancelled)
+  [x] Settings screen → digest toggle + post-call threshold → saved to backend
+  [x] Push notification service (scaffolded, ready once Firebase installed)
+  [x] Post-call capture service (scaffolded, ready once call-log package installed)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ LEFT — CODING (still needs to be built)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  MOBILE SCREENS STILL USING FAKE/MOCK DATA:
+  ─────────────────────────────────────────────
+  [ ] ScheduleScreen — still uses fullWeekDemoJobs fake data, not connected to API
+  [ ] EarningsScreen — complete placeholder, shows nothing (needs /api/earnings
+      or aggregate from completed jobs)
+  [ ] DashboardScreen — all stats hardcoded (€4,280, 4.9 rating, 12 jobs),
+      needs real backend endpoint to pull provider stats
+  [ ] AddJobModal — uses MOCK_CLIENTS list, needs to call contactsAPI.list()
+  [ ] ChatListScreen — all conversations are hardcoded fake data
+      (NOTE: no chat backend exists yet — may be out of MVP scope)
+  [ ] Billing screens (Expenses + Invoices) — load from mockBilling.ts,
+      not connected to backend invoices/expenses APIs
+
+  AUTH:
+  ─────
+  [ ] Google Sign-In path — stores 'mock-google-token', not real
+      (requires Google OAuth setup — may cut from MVP)
+  [ ] Email OTP path — stores 'mock-email-token', not real
+      (phone OTP is the MVP path, email can stay mock)
+
+  BACKEND ENDPOINTS STILL NEEDED:
+  ─────────────────────────────────
+  [ ] GET /api/earnings — provider revenue summary (total earned, this month,
+      per job breakdown) — needed for EarningsScreen
+  [ ] GET /api/stats — provider dashboard stats (job counts, rating, response
+      time, win rate) — needed for DashboardScreen
+
+  ANDROID NATIVE:
+  ───────────────
+  [ ] Android overlay service — floating bubble over other apps (SYSTEM_ALERT_WINDOW)
+      The in-app bubble works fine. This is a nice-to-have, not MVP blocker.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔑 WHAT I NEED FROM YOU — API KEYS & ACCOUNTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  These are BLOCKERS. Nothing works in production without them.
+
+  1. RENDER (backend hosting)
+     ─────────────────────────
+     - Create account at render.com
+     - Create a new Web Service → connect GitHub repo → backend/ folder
+     - Create a PostgreSQL database on Render
+     - Need from you: DATABASE_URL (Render gives this after DB creation)
+
+  2. GROQ (AI — Whisper + Llama)
+     ──────────────────────────────
+     - Already done per memory ✅
+     - Add to Render env vars: GROQ_API_KEY=your_key
+
+  3. TWILIO (SMS OTP)
+     ──────────────────
+     - Due: April 10
+     - Create account at twilio.com
+     - Get a phone number (Portugal +351 number preferred)
+     - Need from you:
+         TWILIO_ACCOUNT_SID=ACxxxx
+         TWILIO_AUTH_TOKEN=xxxx
+         TWILIO_PHONE_NUMBER=+351xxxxxxxx
+
+  4. FIREBASE (push notifications)
+     ──────────────────────────────
+     - Create project at firebase.google.com
+     - Add Android app → package name: com.tregoprovider (check android/app/build.gradle)
+     - Download google-services.json → place in mobile/TregoProviderAppMobile/android/app/
+     - Go to Project Settings → Cloud Messaging → copy Server Key
+     - Need from you:
+         FIREBASE_SERVER_KEY=xxxx  (for backend .env)
+         google-services.json file (for mobile)
+     - Then run: npm install @react-native-firebase/app @react-native-firebase/messaging
+       inside mobile/TregoProviderAppMobile/
+
+  5. CLOUDINARY (job photos)
+     ─────────────────────────
+     - Due: April 1
+     - Create account at cloudinary.com
+     - Go to Dashboard → copy credentials
+     - Need from you:
+         CLOUDINARY_CLOUD_NAME=xxxx
+         CLOUDINARY_API_KEY=xxxx
+         CLOUDINARY_API_SECRET=xxxx
+
+  6. MOLONI (Portuguese invoicing)
+     ────────────────────────────────
+     - Due: April 15
+     - Register at moloni.pt (requires Portuguese NIF)
+     - Create an app in Moloni developer portal
+     - Need from you:
+         MOLONI_CLIENT_ID=xxxx
+         MOLONI_CLIENT_SECRET=xxxx
+         MOLONI_USERNAME=xxxx (your Moloni login email)
+         MOLONI_PASSWORD=xxxx (your Moloni login password)
+
+  7. SENTRY (crash monitoring)
+     ──────────────────────────
+     - Create project at sentry.io
+     - Need from you:
+         SENTRY_DSN=https://xxxx@sentry.io/xxxx
+
+  8. REACT-NATIVE-CALL-LOG (post-call prompt)
+     ──────────────────────────────────────────
+     - Run this command yourself (1 min):
+         cd mobile/TregoProviderAppMobile
+         npm install react-native-call-log
+         npx react-native run-android
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 BACKEND .env FILE — WHAT IT SHOULD LOOK LIKE WHEN COMPLETE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  DATABASE_URL=postgresql://...
+  JWT_SECRET=any_long_random_string_you_choose
+  GROQ_API_KEY=gsk_...
+  TWILIO_ACCOUNT_SID=AC...
+  TWILIO_AUTH_TOKEN=...
+  TWILIO_PHONE_NUMBER=+351...
+  FIREBASE_SERVER_KEY=AAAA...
+  CLOUDINARY_CLOUD_NAME=...
+  CLOUDINARY_API_KEY=...
+  CLOUDINARY_API_SECRET=...
+  MOLONI_CLIENT_ID=...
+  MOLONI_CLIENT_SECRET=...
+  MOLONI_USERNAME=...
+  MOLONI_PASSWORD=...
+  SENTRY_DSN=https://...@sentry.io/...
+  PORT=3000
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 OVERALL PROGRESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Backend code:        100% complete
+  Mobile code:          80% complete (5 screens still have mock data)
+  API keys / accounts:  10% complete (only Groq done)
+  Deployment:            0% (nothing on Render yet)
+
+  LAUNCH TARGET: April 30, 2026
+  Days remaining: 29
+
+================================================================================
