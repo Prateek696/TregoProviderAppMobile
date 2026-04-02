@@ -9,7 +9,7 @@ import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 // ─── Config ──────────────────────────────────────────────────────────────────
 // Change this to your Render URL when deployed
 export const API_BASE_URL = __DEV__
-  ? 'http://10.0.2.2:3000' // Android emulator → localhost
+  ? 'http://10.0.2.2:3001' // Android emulator → localhost
   : 'https://tregoproviderappmobile.onrender.com';
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
