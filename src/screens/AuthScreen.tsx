@@ -28,6 +28,10 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Colors } from '../shared/constants/colors';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import { TregoLogo } from '../components/TregoLogo';
+import { authAPI, getAPIError } from '../services/api';
+import CountryPicker, { Country, COUNTRIES } from '../components/ui/CountryPicker';
+import { registerPushToken } from '../services/notifications';
+import auth from '@react-native-firebase/auth';
 import Svg, { Path } from 'react-native-svg';
 import Animated, {
   useSharedValue,
@@ -53,10 +57,12 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]); // Portugal default
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isSignUp, setIsSignUp] = useState(true);
+  const firebaseConfirmRef = React.useRef<any>(null);
 
   // Animated values for gradient layers
   const gradientAnim1 = React.useRef(new RNAnimated.Value(0)).current;
@@ -202,10 +208,15 @@ export default function AuthScreen() {
     setIsLoading(true);
     setError('');
     try {
-      await new Promise<void>(resolve => setTimeout(resolve, 1000));
+      // Combine selected country dial code with the local number (strip any leading 0)
+      const localNumber = phone.replace(/^\+?\d*\s*/, '').replace(/^0/, '');
+      const fullPhone = `${selectedCountry.dialCode}${localNumber}`;
+      // Firebase sends the SMS OTP — no backend call needed here
+      const confirmation = await auth().signInWithPhoneNumber(fullPhone);
+      firebaseConfirmRef.current = confirmation;
       setAuthStep('verify-phone-otp');
-    } catch (err) {
-      setError('Failed to send SMS verification');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP');
     } finally {
       setIsLoading(false);
     }
@@ -219,17 +230,26 @@ export default function AuthScreen() {
     setIsLoading(true);
     setError('');
     try {
-      await new Promise<void>(resolve => setTimeout(resolve, 1000));
-      await jsonStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'mock-otp-token');
-      await jsonStorage.setItem(STORAGE_KEYS.PROVIDER_PROFILE, {
-        email: email || phone,
-        authMethod: authStep === 'verify-phone-otp' ? 'phone' : 'email',
-      });
-      // Check if onboarding is complete, otherwise go to Onboarding
-      const onboardingComplete = await jsonStorage.getItem<boolean>(STORAGE_KEYS.ONBOARDING_COMPLETE);
-      navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
-    } catch (err) {
-      setError('Invalid verification code');
+      if (authStep === 'verify-phone-otp') {
+        // Confirm OTP with Firebase on device
+        const userCredential = await firebaseConfirmRef.current?.confirm(otp);
+        // Get Firebase ID token and exchange for our own JWT
+        const idToken = await userCredential.user.getIdToken();
+        const res = await authAPI.firebaseAuth(idToken);
+        const { token, provider, isNew } = res.data;
+        await jsonStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+        await jsonStorage.setItem(STORAGE_KEYS.PROVIDER_PROFILE, provider);
+        registerPushToken();
+        navigation.replace(isNew ? 'Onboarding' : 'Main');
+      } else {
+        // Email OTP — mock (not in MVP)
+        await jsonStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'mock-otp-token');
+        await jsonStorage.setItem(STORAGE_KEYS.PROVIDER_PROFILE, { email, authMethod: 'email' });
+        const onboardingComplete = await jsonStorage.getItem<boolean>(STORAGE_KEYS.ONBOARDING_COMPLETE);
+        navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Invalid verification code');
     } finally {
       setIsLoading(false);
     }
@@ -422,14 +442,23 @@ export default function AuthScreen() {
       <View style={styles.form}>
         <View style={styles.inputGroup}>
           <Label>Phone Number</Label>
-          <Input
-            placeholder="+351 912 345 678"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            autoComplete="tel"
-          />
-          <Text style={styles.hintText}>Include country code (e.g., +351 for Portugal)</Text>
+          <View style={styles.phoneRow}>
+            <CountryPicker
+              selected={selectedCountry}
+              onSelect={c => { setSelectedCountry(c); setPhone(''); }}
+            />
+            <Input
+              placeholder="912 345 678"
+              value={phone}
+              onChangeText={text => setPhone(text.replace(/[^\d\s\-]/g, ''))}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              style={styles.phoneInput}
+            />
+          </View>
+          <Text style={styles.hintText}>
+            {selectedCountry.flag}  {selectedCountry.name} ({selectedCountry.dialCode})
+          </Text>
         </View>
 
         {error ? (
@@ -820,6 +849,14 @@ const styles = StyleSheet.create({
   hintText: {
     fontSize: 12,
     color: Colors.mutedForeground,
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  phoneInput: {
+    flex: 1,
   },
   errorContainer: {
     flexDirection: 'row',
