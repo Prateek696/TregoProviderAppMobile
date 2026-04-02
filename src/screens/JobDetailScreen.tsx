@@ -467,10 +467,19 @@ export default function JobDetailScreen() {
   );
 }
 
+const D = {
+  bg: '#0f172a',
+  surface: '#1e293b',
+  surfaceLight: '#334155',
+  border: '#334155',
+  text: '#f1f5f9',
+  textMuted: '#94a3b8',
+};
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: D.bg,
   },
   header: {
     flexDirection: 'row',
@@ -478,7 +487,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: D.border,
+    backgroundColor: D.surface,
   },
   backButton: {
     flexDirection: 'row',
@@ -487,14 +497,14 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: Colors.foreground,
+    color: D.text,
     marginLeft: -4,
   },
   headerTitle: {
     flex: 1,
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.foreground,
+    color: D.text,
     textAlign: 'center',
   },
   headerSpacer: {
@@ -522,13 +532,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: D.bg,
   },
   loadingText: {
     fontSize: 14,
-    color: Colors.mutedForeground,
+    color: D.textMuted,
   },
   headerCard: {
     marginBottom: 0,
+    backgroundColor: D.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: D.border,
   },
   jobHeader: {
     gap: 12,
@@ -542,7 +558,7 @@ const styles = StyleSheet.create({
   jobTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: Colors.foreground,
+    color: D.text,
   },
   statusBadge: {
     alignSelf: 'flex-start',
@@ -555,7 +571,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 14,
-    color: Colors.foreground,
+    color: D.text,
     lineHeight: 20,
   },
   infoRow: {
@@ -567,12 +583,12 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.mutedForeground,
+    color: D.textMuted,
     flex: 1,
   },
   infoValue: {
     fontSize: 14,
-    color: Colors.foreground,
+    color: D.text,
     flex: 2,
     textAlign: 'right',
   },

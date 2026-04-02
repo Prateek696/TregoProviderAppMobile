@@ -383,17 +383,7 @@ export default function JobsScreen() {
         key={job.id}
         activeOpacity={0.85}
         onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}
-        onLongPress={() =>
-          Alert.alert('Delete Job', 'Are you sure you want to delete this job?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: async () => {
-              try {
-                await jobsAPI.update(job.id, { status: 'cancelled' });
-                loadJobs();
-              } catch (e) { Alert.alert('Error', 'Could not delete job'); }
-            }},
-          ])
-        }
+        onLongPress={() => {}}
         style={[
           styles.standardCard,
           isUrgent && { borderColor: COLORS.danger, borderWidth: 1.5 },
@@ -411,7 +401,36 @@ export default function JobsScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.standardTimeText}>{job.scheduledTime}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.standardTimeText}>{job.scheduledTime}</Text>
+            <TouchableOpacity
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() =>
+                Alert.alert(
+                  'Delete Job',
+                  `Delete "${job.title}"? This cannot be undone.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await jobsAPI.update(job.id, { status: 'cancelled' });
+                          loadJobs();
+                        } catch (e) {
+                          Alert.alert('Error', 'Could not delete job');
+                        }
+                      },
+                    },
+                  ]
+                )
+              }>
+              <View style={styles.deleteBtn}>
+                <Icon name="close" size={14} color={COLORS.danger} />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.standardContent}>
@@ -990,6 +1009,16 @@ const styles = StyleSheet.create({
   },
 
   // 4.6 — Urgent badge
+  deleteBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.danger + '22',
+    borderWidth: 1,
+    borderColor: COLORS.danger + '55',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   urgentBadge: {
     backgroundColor: '#7f1d1d',
     borderColor: '#ef4444',

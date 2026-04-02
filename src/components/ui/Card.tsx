@@ -63,10 +63,10 @@ export function CardFooter({ children, style }: CardFooterProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.background,
+    backgroundColor: '#1e293b',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#334155',
     padding: 0,
   },
   header: {
@@ -77,12 +77,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.foreground,
+    color: '#f1f5f9',
     marginBottom: 4,
   },
   description: {
     fontSize: 14,
-    color: Colors.mutedForeground,
+    color: '#94a3b8',
   },
   content: {
     paddingHorizontal: 24,
