@@ -416,7 +416,7 @@ export default function JobsScreen() {
                       style: 'destructive',
                       onPress: async () => {
                         try {
-                          await jobsAPI.update(job.id, { status: 'cancelled' });
+                          await jobsAPI.update(job.id, { exec_status: 'cancelled' });
                           loadJobs();
                         } catch (e) {
                           Alert.alert('Error', 'Could not delete job');
