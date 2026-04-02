@@ -209,7 +209,7 @@ export default function AuthScreen() {
     setError('');
     try {
       // Combine selected country dial code with the local number (strip any leading 0)
-      const localNumber = phone.replace(/^\+?\d*\s*/, '').replace(/^0/, '');
+      const localNumber = phone.trim().replace(/\s+/g, '').replace(/^0/, '');
       const fullPhone = `${selectedCountry.dialCode}${localNumber}`;
       // Firebase sends the SMS OTP — no backend call needed here
       const confirmation = await auth().signInWithPhoneNumber(fullPhone);

@@ -20,6 +20,19 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Request logger
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    const status = res.statusCode;
+    const color = status >= 500 ? '\x1b[31m' : status >= 400 ? '\x1b[33m' : '\x1b[32m';
+    const reset = '\x1b[0m';
+    console.log(`${color}${req.method} ${req.path} → ${status}${reset} (${ms}ms)${req.body && Object.keys(req.body).length ? ' body:' + JSON.stringify(req.body).slice(0, 120) : ''}`);
+  });
+  next();
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
