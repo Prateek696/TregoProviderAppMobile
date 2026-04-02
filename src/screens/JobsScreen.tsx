@@ -27,7 +27,7 @@ import { mapBackendJob } from '../services/jobActions';
 import { startOfflineSyncListener } from '../services/offlineQueue';
 import { checkForPostCallPrompt, requestCallLogPermission } from '../services/callLog';
 import { onForegroundMessage } from '../services/notifications';
-import { Modal, Alert } from 'react-native';
+import { Modal, Alert, Linking } from 'react-native';
 
 type JobsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobsList'>;
 
@@ -379,10 +379,25 @@ export default function JobsScreen() {
     const isUrgent = job.priority === 'urgent';
 
     return (
-      <View key={job.id} style={[
-        styles.standardCard,
-        isUrgent && { borderColor: COLORS.danger, borderWidth: 1.5 },
-      ]}>
+      <TouchableOpacity
+        key={job.id}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}
+        onLongPress={() =>
+          Alert.alert('Delete Job', 'Are you sure you want to delete this job?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: async () => {
+              try {
+                await jobsAPI.update(job.id, { status: 'cancelled' });
+                loadJobs();
+              } catch (e) { Alert.alert('Error', 'Could not delete job'); }
+            }},
+          ])
+        }
+        style={[
+          styles.standardCard,
+          isUrgent && { borderColor: COLORS.danger, borderWidth: 1.5 },
+        ]}>
         <View style={styles.standardHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {isUrgent && (
@@ -423,24 +438,41 @@ export default function JobsScreen() {
         </View>
 
         <View style={styles.standardFooter}>
-          <TouchableOpacity style={styles.standardFooterButton}>
+          <TouchableOpacity
+            style={styles.standardFooterButton}
+            onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}>
             <Icon name="message-outline" size={18} color="#f1f5f9" />
             <Text style={styles.standardFooterText}>Chat</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.standardFooterButton}>
+          <TouchableOpacity
+            style={styles.standardFooterButton}
+            onPress={() => {
+              const addr = encodeURIComponent(job.address || job.location || '');
+              if (addr) Linking.openURL(`https://maps.google.com/?q=${addr}`);
+            }}>
             <Icon name="navigation-variant-outline" size={18} color="#f1f5f9" />
             <Text style={styles.standardFooterText}>Navigate</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.standardMainButton, { backgroundColor: '#3b82f6' }]}>
+          <TouchableOpacity
+            style={[styles.standardMainButton, { backgroundColor: '#3b82f6' }]}
+            onPress={async () => {
+              try {
+                const newStatus = isConfirmed ? 'en-route' : 'confirmed';
+                await jobsAPI.update(job.id, { exec_status: newStatus });
+                loadJobs();
+              } catch (e) {
+                Alert.alert('Error', 'Could not update job status');
+              }
+            }}>
             <Icon name={isConfirmed ? "play" : "check"} size={18} color="#fff" />
             <Text style={styles.standardMainButtonText}>
               {isConfirmed ? "Start Job" : "Accept Job"}
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
