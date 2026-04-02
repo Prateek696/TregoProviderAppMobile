@@ -37,6 +37,7 @@ const styles = StyleSheet.create({
   input: {
     height: 44,
     width: '100%',
+    flexShrink: 1,
     minWidth: 0,
     borderRadius: 8,
     borderWidth: 1,
