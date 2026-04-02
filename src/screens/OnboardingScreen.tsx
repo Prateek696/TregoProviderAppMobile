@@ -357,10 +357,41 @@ export default function OnboardingScreen() {
 
       // Persist to backend — best effort (don't block navigation if it fails)
       try {
+        // Map working hours from named-day format to day_of_week integer format
+        const DAY_MAP: Record<string, number> = {
+          sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+          thursday: 4, friday: 5, saturday: 6,
+        };
+        const mappedHours = workingHours
+          ? Object.entries(workingHours).map(([day, schedule]: [string, any]) => ({
+              day_of_week: DAY_MAP[day],
+              is_active: schedule.active,
+              blocks: schedule.blocks || [],
+            }))
+          : undefined;
+
         await profileAPI.update({
           name: firstName,
+          last_name: personalInfo?.lastName || undefined,
           trade: selectedServices[0] || undefined,
-        });
+          nif: personalInfo?.vatNif || undefined,
+          // All 3 services
+          services: selectedServices.map((s, i) => ({ name: s, category: null })),
+          // Base locations
+          locations: baseLocations.map(loc => ({
+            nickname: loc.nickname,
+            street: loc.address,
+            city: loc.city,
+            zipCode: loc.zipCode,
+          })),
+          // Working hours
+          working_hours: mappedHours,
+          // Coverage
+          coverage_radius: hasUnlimitedCoverage ? undefined : coverageRadius,
+          coverage_unlimited: hasUnlimitedCoverage,
+          coverage_mode: coverageMode === 'distance' ? 'radius' : 'city',
+          coverage_cities: coverageMode === 'city' ? selectedCities : [],
+        } as any);
       } catch (e) {
         console.warn('Onboarding: failed to sync profile to backend', e);
       }
