@@ -210,6 +210,7 @@ export default function OnboardingScreen() {
   const [assistantName, setAssistantName] = useState('');
   const [orbColor, setOrbColor] = useState('#3b82f6'); // Default: Blue Dots
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [serviceCategoryMap, setServiceCategoryMap] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
   const [showServiceHelp, setShowServiceHelp] = useState(false);
@@ -277,6 +278,10 @@ export default function OnboardingScreen() {
       ? currentServices.filter(s => s !== service)
       : [...currentServices, service];
     setSelectedServices(updatedServices);
+    // Track which category this service belongs to
+    if (selectedCategory && !currentServices.includes(service)) {
+      setServiceCategoryMap(prev => ({ ...prev, [service]: selectedCategory }));
+    }
   };
 
   const addCustomService = (customService: string) => {
@@ -379,7 +384,7 @@ export default function OnboardingScreen() {
           assistant_name: assistantName || undefined,
           orb_color: orbColor || undefined,
           // All 3 services
-          services: selectedServices.map((s) => ({ name: s, category: null })),
+          services: selectedServices.map((s) => ({ name: s, category: serviceCategoryMap[s] || null })),
           // Base locations
           locations: baseLocations.map(loc => ({
             nickname: loc.nickname,
