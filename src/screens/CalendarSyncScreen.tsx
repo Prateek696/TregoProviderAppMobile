@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,13 +15,6 @@ import {
   GoogleSignin,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
-
-// Configure once — uses the Web Client ID for token exchange
-GoogleSignin.configure({
-  webClientId: '217369564821-ictca9vsbg5fsivbkhq16hr6g7cr4j1u.apps.googleusercontent.com',
-  scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
-  offlineAccess: false,
-});
 
 interface CalendarEvent {
   id: string;
@@ -51,6 +44,14 @@ export default function CalendarSyncScreen({
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [error, setError] = useState('');
   const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: '217369564821-ictca9vsbg5fsivbkhq16hr6g7cr4j1u.apps.googleusercontent.com',
+      scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+      offlineAccess: false,
+    });
+  }, []);
 
   const formatEventDate = (dateObj: any): string => {
     const raw = dateObj?.dateTime || dateObj?.date;
