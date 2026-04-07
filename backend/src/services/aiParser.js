@@ -50,14 +50,41 @@ Respond ONLY with a valid JSON object (no markdown, no explanation) with these e
 }`;
 
 // ── Auto-schedule: find next available slot from provider working hours ──────
-async function autoSchedule(providerId, jobId) {
+// Default durations per job category (minutes)
+const CATEGORY_DURATIONS = {
+  plumbing:    90,
+  electrical:  120,
+  carpentry:   180,
+  painting:    240,
+  cleaning:    120,
+  hvac:        150,
+  landscaping: 180,
+  general:     60,
+  other:       60,
+};
+const BUFFER_MINUTES = 15; // gap between jobs
+
+function formatSlotMessage(slotStart, offsetDays) {
+  const timeStr = slotStart.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const [h, m] = timeStr.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  const formatted = `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
+
+  if (offsetDays === 0) return `Scheduled for Today at ${formatted}`;
+  if (offsetDays === 1) return `No availability today. Scheduled for Tomorrow at ${formatted}`;
+  const dateLabel = slotStart.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+  return `Scheduled for ${dateLabel} at ${formatted}`;
+}
+
+async function autoSchedule(providerId, jobId, category) {
   // Load provider working hours (0=Sun … 6=Sat)
   const { rows: wh } = await pool.query(
     `SELECT day_of_week, is_active, blocks FROM provider_working_hours WHERE provider_id = $1`,
     [providerId]
   );
 
-  // Build schedule map; default Mon-Fri 09:00-17:00 if none configured
+  // Build schedule map; default Mon-Fri 09:00-18:00 if none configured
   const scheduleMap = {};
   for (const row of wh) {
     if (row.is_active && Array.isArray(row.blocks) && row.blocks.length > 0) {
@@ -65,68 +92,81 @@ async function autoSchedule(providerId, jobId) {
     }
   }
   if (Object.keys(scheduleMap).length === 0) {
-    for (let d = 1; d <= 5; d++) scheduleMap[d] = [{ start: '09:00', end: '17:00' }];
+    for (let d = 1; d <= 5; d++) scheduleMap[d] = [{ start: '09:00', end: '18:00' }];
   }
 
-  const JOB_DURATION_MIN = 90;
+  const jobDuration = CATEGORY_DURATIONS[category?.toLowerCase()] || 60;
   const now = new Date();
 
-  for (let offset = 0; offset <= 14; offset++) {
+  for (let offset = 0; offset <= 30; offset++) {
     const day = new Date(now);
     day.setDate(now.getDate() + offset);
     day.setHours(0, 0, 0, 0);
 
     const dow = day.getDay();
     const blocks = scheduleMap[dow];
-    if (!blocks) continue;
+    if (!blocks || blocks.length === 0) continue;
 
-    const firstBlock = blocks[0];
-    const [sh, sm] = firstBlock.start.split(':').map(Number);
-    const [eh, em] = firstBlock.end.split(':').map(Number);
+    // Check each time block in the day (providers can have split schedules)
+    for (const block of blocks) {
+      const [sh, sm] = block.start.split(':').map(Number);
+      const [eh, em] = block.end.split(':').map(Number);
 
-    const dayStart = new Date(day);
-    dayStart.setHours(sh, sm, 0, 0);
-    const dayEnd = new Date(day);
-    dayEnd.setHours(eh, em, 0, 0);
+      const blockStart = new Date(day);
+      blockStart.setHours(sh, sm, 0, 0);
+      const blockEnd = new Date(day);
+      blockEnd.setHours(eh, em, 0, 0);
 
-    // If today, slot must start at or after now
-    let slotStart = new Date(dayStart);
-    if (offset === 0 && now > slotStart) {
-      slotStart = new Date(now);
-      slotStart.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+      // Slot must start at or after now (for today)
+      let slotStart = new Date(blockStart);
+      if (offset === 0 && now > slotStart) {
+        slotStart = new Date(now);
+        // Round up to next 15-minute mark
+        slotStart.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+      }
+
+      if (slotStart >= blockEnd) continue; // past this block
+
+      // Fetch existing jobs for this day sorted by start time
+      const dateStr = day.toISOString().split('T')[0];
+      const { rows: existing } = await pool.query(
+        `SELECT scheduled_at,
+                COALESCE(estimated_duration_minutes, 60) AS dur
+         FROM jobs
+         WHERE provider_id = $1
+           AND id != $2
+           AND exec_status IN ('confirmed', 'en-route', 'on-site', 'paused')
+           AND scheduled_at::date = $3
+         ORDER BY scheduled_at`,
+        [providerId, jobId, dateStr]
+      );
+
+      // Push slotStart past each conflicting job + buffer
+      for (const e of existing) {
+        const eStart = new Date(e.scheduled_at);
+        const eEnd   = new Date(eStart.getTime() + (e.dur + BUFFER_MINUTES) * 60000);
+        if (slotStart >= eStart && slotStart < eEnd) {
+          slotStart = new Date(eEnd);
+        } else if (slotStart < eStart) {
+          break; // gap before this job — check if it fits
+        }
+      }
+
+      // Check job fits within this block
+      const slotEnd = new Date(slotStart.getTime() + jobDuration * 60000);
+      if (slotEnd <= blockEnd) {
+        const message = formatSlotMessage(slotStart, offset);
+        return { scheduledAt: slotStart, message, durationMinutes: jobDuration };
+      }
     }
-
-    // Get existing confirmed jobs for this day, ordered by start time
-    const dateStr = day.toISOString().split('T')[0];
-    const { rows: existing } = await pool.query(
-      `SELECT scheduled_at, COALESCE(estimated_duration_minutes, 90) AS dur
-       FROM jobs
-       WHERE provider_id = $1
-         AND id != $2
-         AND exec_status IN ('confirmed', 'en-route', 'on-site', 'paused')
-         AND scheduled_at::date = $3
-       ORDER BY scheduled_at`,
-      [providerId, jobId, dateStr]
-    );
-
-    // Push slotStart past any overlapping existing jobs
-    for (const e of existing) {
-      const eStart = new Date(e.scheduled_at);
-      const eEnd   = new Date(eStart.getTime() + e.dur * 60000);
-      if (slotStart < eEnd && slotStart >= eStart) slotStart = new Date(eEnd);
-      else if (slotStart < eStart) break; // gap found before this job
-    }
-
-    // Check slot fits within working hours
-    const slotEnd = new Date(slotStart.getTime() + JOB_DURATION_MIN * 60000);
-    if (slotEnd <= dayEnd) return slotStart;
   }
 
-  // Fallback: next Monday 09:00
+  // Fallback: tomorrow 09:00
   const fallback = new Date(now);
   fallback.setDate(now.getDate() + 1);
   fallback.setHours(9, 0, 0, 0);
-  return fallback;
+  const message = formatSlotMessage(fallback, 1);
+  return { scheduledAt: fallback, message, durationMinutes: jobDuration };
 }
 
 // Fields that count as "recognisable job content"
@@ -299,16 +339,20 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
   );
 
   // ── Auto-schedule if AI returned no datetime ─────────────────────────────────
+  let scheduleMessage = null;
   if (!datetime) {
     try {
-      const autoTime = await autoSchedule(providerId, jobId);
+      const { scheduledAt, message, durationMinutes } = await autoSchedule(providerId, jobId, category);
+      scheduleMessage = message;
       await pool.query(
         `UPDATE jobs
          SET scheduled_at               = $1,
-             estimated_duration_minutes = COALESCE(estimated_duration_minutes, 90),
+             estimated_duration_minutes = $2,
+             auto_scheduled             = TRUE,
+             schedule_message           = $3,
              updated_at                 = NOW()
-         WHERE id = $2`,
-        [autoTime.toISOString(), jobId]
+         WHERE id = $4`,
+        [scheduledAt.toISOString(), durationMinutes, message, jobId]
       );
     } catch (autoErr) {
       console.error('Auto-schedule error:', autoErr.message);
@@ -353,6 +397,8 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
     notifBody = `Possible duplicate — you logged a similar job recently. Same job?`;
   } else if (recurringFlag) {
     notifBody = recurringNote;
+  } else if (scheduleMessage) {
+    notifBody = scheduleMessage;
   } else {
     notifBody = 'Your job has been structured and is ready to review.';
   }
@@ -365,6 +411,8 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
       job_id: jobId,
       duplicate_flag: String(duplicateFlag),
       duplicate_job_id: duplicateJobId || '',
+      auto_scheduled: String(!datetime && !!scheduleMessage),
+      schedule_message: scheduleMessage || '',
     },
   });
 }
