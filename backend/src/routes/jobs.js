@@ -356,6 +356,21 @@ router.put(
   }
 );
 
+// POST /api/jobs/transcribe — upload audio, transcribe only (no job created), for notification review flow
+router.post('/transcribe', auth, upload.single('audio'), async (req, res, next) => {
+  if (!req.file) return res.status(400).json({ error: 'Audio file is required' });
+  const filePath = req.file.path;
+  try {
+    const rawText = await transcribeAudio(filePath);
+    res.json({ raw_text: rawText });
+  } catch (err) {
+    next(err);
+  } finally {
+    fs.unlink(filePath, () => {});
+    fs.unlink(filePath + '.m4a', () => {});
+  }
+});
+
 // POST /api/jobs/voice — upload audio, transcribe, create job, fire AI parse
 router.post('/voice', auth, upload.single('audio'), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: 'Audio file is required' });
