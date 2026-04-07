@@ -6,10 +6,12 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Transcribe an audio file using Groq Whisper
 // Returns the transcribed text string
 async function transcribeAudio(filePath) {
-  const audioStream = fs.createReadStream(filePath);
+  // Groq requires a recognised extension — multer strips it, so rename before reading
+  const renamedPath = filePath + '.m4a';
+  fs.renameSync(filePath, renamedPath);
 
   const transcription = await groq.audio.transcriptions.create({
-    file: audioStream,
+    file: fs.createReadStream(renamedPath),
     model: 'whisper-large-v3',
     response_format: 'text',
     // No language specified — auto-detect PT, EN, RO, or any mix

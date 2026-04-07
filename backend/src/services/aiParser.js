@@ -4,7 +4,7 @@ const { sendPushNotification } = require('./notifications');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const MODEL = 'llama-3.1-8b-instant';
+const MODEL = 'llama-3.3-70b-versatile';
 
 // Portuguese time-of-day conventions used for date resolution
 const PT_TIME_CONVENTIONS = `
@@ -38,6 +38,7 @@ Respond ONLY with a valid JSON object (no markdown, no explanation) with these e
 {
   "title": "short job title, 3-6 words (e.g. Fix leaking pipe, Install socket)",
   "service": "same as title or slightly more descriptive",
+  "description": "polished 1-3 sentence job description in English summarising all details: what the job is, where, when, for whom, and any price. Write it as a professional brief, not a transcript. Example: 'Fix a leaking pipe under the kitchen sink at Rua Augusta 12, Lisbon. Scheduled for tomorrow at 10:00 for client João Silva. Estimated €80.'",
   "category": "one of: plumbing, electrical, carpentry, painting, general, other",
   "location": "address or area mentioned, or null",
   "address": "full street address if mentioned, or null",
@@ -47,6 +48,86 @@ Respond ONLY with a valid JSON object (no markdown, no explanation) with these e
   "urgent": boolean — true if urgency words detected, false otherwise,
   "confidence": float 0.0 to 1.0 — how confident you are in the extraction
 }`;
+
+// ── Auto-schedule: find next available slot from provider working hours ──────
+async function autoSchedule(providerId, jobId) {
+  // Load provider working hours (0=Sun … 6=Sat)
+  const { rows: wh } = await pool.query(
+    `SELECT day_of_week, is_active, blocks FROM provider_working_hours WHERE provider_id = $1`,
+    [providerId]
+  );
+
+  // Build schedule map; default Mon-Fri 09:00-17:00 if none configured
+  const scheduleMap = {};
+  for (const row of wh) {
+    if (row.is_active && Array.isArray(row.blocks) && row.blocks.length > 0) {
+      scheduleMap[row.day_of_week] = row.blocks;
+    }
+  }
+  if (Object.keys(scheduleMap).length === 0) {
+    for (let d = 1; d <= 5; d++) scheduleMap[d] = [{ start: '09:00', end: '17:00' }];
+  }
+
+  const JOB_DURATION_MIN = 90;
+  const now = new Date();
+
+  for (let offset = 0; offset <= 14; offset++) {
+    const day = new Date(now);
+    day.setDate(now.getDate() + offset);
+    day.setHours(0, 0, 0, 0);
+
+    const dow = day.getDay();
+    const blocks = scheduleMap[dow];
+    if (!blocks) continue;
+
+    const firstBlock = blocks[0];
+    const [sh, sm] = firstBlock.start.split(':').map(Number);
+    const [eh, em] = firstBlock.end.split(':').map(Number);
+
+    const dayStart = new Date(day);
+    dayStart.setHours(sh, sm, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(eh, em, 0, 0);
+
+    // If today, slot must start at or after now
+    let slotStart = new Date(dayStart);
+    if (offset === 0 && now > slotStart) {
+      slotStart = new Date(now);
+      slotStart.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+    }
+
+    // Get existing confirmed jobs for this day, ordered by start time
+    const dateStr = day.toISOString().split('T')[0];
+    const { rows: existing } = await pool.query(
+      `SELECT scheduled_at, COALESCE(estimated_duration_minutes, 90) AS dur
+       FROM jobs
+       WHERE provider_id = $1
+         AND id != $2
+         AND exec_status IN ('confirmed', 'en-route', 'on-site', 'paused')
+         AND scheduled_at::date = $3
+       ORDER BY scheduled_at`,
+      [providerId, jobId, dateStr]
+    );
+
+    // Push slotStart past any overlapping existing jobs
+    for (const e of existing) {
+      const eStart = new Date(e.scheduled_at);
+      const eEnd   = new Date(eStart.getTime() + e.dur * 60000);
+      if (slotStart < eEnd && slotStart >= eStart) slotStart = new Date(eEnd);
+      else if (slotStart < eStart) break; // gap found before this job
+    }
+
+    // Check slot fits within working hours
+    const slotEnd = new Date(slotStart.getTime() + JOB_DURATION_MIN * 60000);
+    if (slotEnd <= dayEnd) return slotStart;
+  }
+
+  // Fallback: next Monday 09:00
+  const fallback = new Date(now);
+  fallback.setDate(now.getDate() + 1);
+  fallback.setHours(9, 0, 0, 0);
+  return fallback;
+}
 
 // Fields that count as "recognisable job content"
 function hasJobContent(parsed) {
@@ -67,6 +148,10 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
 
   await pool.query(
     `UPDATE jobs SET status = 'processing', updated_at = NOW() WHERE id = $1`,
+    [jobId]
+  );
+  await pool.query(
+    `INSERT INTO job_status_log (job_id, old_status, new_status) VALUES ($1, 'raw', 'processing')`,
     [jobId]
   );
 
@@ -93,7 +178,7 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
     return;
   }
 
-  const { title, service, category, location, address, datetime, client_name, price, urgent, confidence } = parsed;
+  const { title, service, description, category, location, address, datetime, client_name, price, urgent, confidence } = parsed;
 
   // ── Garbage detection (4.5) ──────────────────────────────────────────────────
   // If confidence is very low and no recognisable fields, discard the job
@@ -184,20 +269,22 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
      SET status          = 'structured',
          title           = COALESCE($1, title),
          service         = COALESCE($2, service),
-         category        = COALESCE($3, category),
-         location        = COALESCE($4, location),
-         address         = COALESCE($5, address),
-         scheduled_at    = COALESCE($6, scheduled_at),
-         price           = COALESCE($7, price),
-         priority        = $8,
-         ai_confidence   = $9,
-         recurring_flag  = $10,
-         recurring_note  = $11,
+         description     = COALESCE($3, description),
+         category        = COALESCE($4, category),
+         location        = COALESCE($5, location),
+         address         = COALESCE($6, address),
+         scheduled_at    = COALESCE($7, scheduled_at),
+         price           = COALESCE($8, price),
+         priority        = $9,
+         ai_confidence   = $10,
+         recurring_flag  = $11,
+         recurring_note  = $12,
          updated_at      = NOW()
-     WHERE id = $12`,
+     WHERE id = $13`,
     [
       title || null,
       service || null,
+      description || null,
       category || null,
       location || null,
       address || null,
@@ -210,6 +297,23 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
       jobId,
     ]
   );
+
+  // ── Auto-schedule if AI returned no datetime ─────────────────────────────────
+  if (!datetime) {
+    try {
+      const autoTime = await autoSchedule(providerId, jobId);
+      await pool.query(
+        `UPDATE jobs
+         SET scheduled_at               = $1,
+             estimated_duration_minutes = COALESCE(estimated_duration_minutes, 90),
+             updated_at                 = NOW()
+         WHERE id = $2`,
+        [autoTime.toISOString(), jobId]
+      );
+    } catch (autoErr) {
+      console.error('Auto-schedule error:', autoErr.message);
+    }
+  }
 
   // ── Client fuzzy-match / create ──────────────────────────────────────────────
   if (client_name) {

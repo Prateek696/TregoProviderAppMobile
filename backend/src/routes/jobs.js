@@ -83,7 +83,7 @@ router.get('/', auth, async (req, res, next) => {
        FROM jobs j
        LEFT JOIN clients c ON j.client_id = c.id
        WHERE j.provider_id = $1
-         AND j.status != 'discarded'
+         AND j.status != 'discarded' AND j.exec_status != 'cancelled'
        ORDER BY j.created_at DESC`,
       [req.provider.id]
     );
@@ -281,7 +281,7 @@ router.put(
       title, description, service, location, address, category,
       priority, notes, price, bid_amount, actual_price,
       scheduled_at, status, exec_status,
-      payment_received, cash_amount,
+      payment_received, cash_amount, client_id, estimated_duration_minutes,
     } = req.body;
 
     // Build lifecycle timestamps based on exec_status transition
@@ -311,14 +311,18 @@ router.put(
              exec_status       = COALESCE($14, exec_status),
              payment_received  = COALESCE($15, payment_received),
              cash_amount       = COALESCE($16, cash_amount),
-             updated_at        = NOW()
-         WHERE id = $17 AND provider_id = $18
+             client_id                  = COALESCE($17, client_id),
+             estimated_duration_minutes = COALESCE($18, estimated_duration_minutes),
+             updated_at                 = NOW()
+         WHERE id = $19 AND provider_id = $20
          RETURNING *`,
         [
           title, description, service, location, address, category,
           priority, notes, price, bid_amount, actual_price,
           scheduled_at, status, exec_status,
           payment_received ?? null, cash_amount ?? null,
+          client_id ?? null,
+          estimated_duration_minutes ?? null,
           req.params.id, req.provider.id,
         ]
       );
@@ -331,6 +335,18 @@ router.put(
           `UPDATE jobs SET ${setClauses} WHERE id = $1`,
           [req.params.id]
         );
+      }
+
+      // Log status transition if exec_status changed
+      if (exec_status) {
+        const prev = await pool.query(`SELECT exec_status FROM jobs WHERE id = $1`, [req.params.id]);
+        const oldStatus = prev.rows[0]?.exec_status;
+        if (oldStatus !== exec_status) {
+          await pool.query(
+            `INSERT INTO job_status_log (job_id, old_status, new_status) VALUES ($1, $2, $3)`,
+            [req.params.id, oldStatus, exec_status]
+          );
+        }
       }
 
       res.json({ job: rows[0] });
@@ -366,7 +382,9 @@ router.post('/voice', auth, upload.single('audio'), async (req, res, next) => {
   } catch (err) {
     next(err);
   } finally {
+    // transcribeAudio renames file to .m4a — clean up whichever exists
     fs.unlink(filePath, () => {});
+    fs.unlink(filePath + '.m4a', () => {});
   }
 });
 
@@ -415,7 +433,27 @@ router.post('/sync', auth, upload.array('audio', 20), async (req, res) => {
   res.json({ synced, total: req.files.length, results });
 });
 
-// POST /api/jobs/:id/photo — attach a photo to a job (plan v2)
+// GET /api/jobs/:id/photos — list all photos for a job
+router.get('/:id/photos', auth, async (req, res, next) => {
+  try {
+    const { rows: jobRows } = await pool.query(
+      `SELECT id FROM jobs WHERE id = $1 AND provider_id = $2`,
+      [req.params.id, req.provider.id]
+    );
+    if (!jobRows.length) return res.status(404).json({ error: 'Job not found' });
+
+    const { rows } = await pool.query(
+      `SELECT id, photo_url, phase, source, latitude, longitude, captured_at, created_at
+       FROM job_photos WHERE job_id = $1 ORDER BY created_at ASC`,
+      [req.params.id]
+    );
+    res.json({ photos: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/jobs/:id/photo — attach a photo to a job
 router.post('/:id/photo', auth, photoUpload.single('photo'), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ error: 'Photo file is required' });
 
@@ -431,12 +469,16 @@ router.post('/:id/photo', auth, photoUpload.single('photo'), async (req, res, ne
 
     const photoUrl = await uploadPhoto(filePath, `trego/jobs/${req.params.id}`);
 
+    const phase = req.body.phase || 'during';   // before | during | after
+    const source = req.body.source || 'provider'; // client | provider
+
     const { rows } = await pool.query(
-      `UPDATE jobs SET photo_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-      [photoUrl, req.params.id]
+      `INSERT INTO job_photos (job_id, photo_url, phase, source, captured_at)
+       VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+      [req.params.id, photoUrl, phase, source]
     );
 
-    res.json({ job: rows[0] });
+    res.json({ photo: rows[0] });
   } catch (err) {
     next(err);
   } finally {
