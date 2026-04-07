@@ -8,7 +8,7 @@
  *   4.5 — Min audio length: recordings < 1.5s are discarded
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  DeviceEventEmitter,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
@@ -48,6 +49,20 @@ export default function VoiceBubble({ onJobCreated, prefilledClient }: VoiceBubb
   const [offlineSaved, setOfflineSaved] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Listen for notification bar / bubble taps
+  useEffect(() => {
+    const subVoice = DeviceEventEmitter.addListener('TregoOpenVoice', () => {
+      if (state === 'idle') handlePressIn();
+    });
+    const subText = DeviceEventEmitter.addListener('TregoOpenText', () => {
+      setShowTextModal(true);
+    });
+    return () => {
+      subVoice.remove();
+      subText.remove();
+    };
+  }, [state]);
   const recordingPath = useRef<string>('');
   const recordingSeconds = useRef(0);
   const durationInterval = useRef<ReturnType<typeof setInterval> | null>(null);

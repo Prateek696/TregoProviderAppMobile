@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Trego floating bubble.
+  A circular button, always on top. Tap → open voice recording.
+  Drag to reposition anywhere on screen.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="60dp"
+    android:layout_height="60dp">
+
+    <!-- Shadow / glow ring -->
+    <View
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:background="@drawable/bubble_shadow"
+        android:elevation="8dp" />
+
+    <!-- Bubble body -->
+    <FrameLayout
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bubble_bg"
+        android:elevation="10dp">
+
+        <!-- Mic icon -->
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center"
+            android:src="@android:drawable/ic_btn_speak_now"
+            android:contentDescription="Record job" />
+    </FrameLayout>
+
+</FrameLayout>

@@ -3,7 +3,7 @@
  * Migrated from web app's ProviderDashboard
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
 import { Card, CardContent } from '../components/ui/Card';
@@ -22,6 +22,7 @@ import { Badge } from '../components/ui/Badge';
 import { Colors } from '../shared/constants/colors';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import { formatDateRange } from '../shared/utils/dateUtils';
+import { jobsAPI } from '../services/api';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'Dashboard'>;
 
@@ -36,64 +37,6 @@ interface Stat {
   color: string;
 }
 
-const STATS: Stat[] = [
-  {
-    label: 'Billing',
-    value: '€4,280',
-    change: 18,
-    icon: 'cash',
-    color: '#10b981',
-  },
-  {
-    label: 'Rating',
-    value: '4.9',
-    change: 2,
-    icon: 'star',
-    color: '#f59e0b',
-  },
-  {
-    label: 'Response Time',
-    value: '12m',
-    change: -20,
-    icon: 'clock-outline',
-    color: '#8b5cf6',
-  },
-  {
-    label: 'Active Jobs',
-    value: '12',
-    change: 33,
-    icon: 'briefcase',
-    color: '#3b82f6',
-  },
-  {
-    label: 'Completed',
-    value: '247',
-    change: 10,
-    icon: 'check-circle',
-    color: '#06b6d4',
-  },
-  {
-    label: 'Avg per Job',
-    value: '€156',
-    change: 8,
-    icon: 'trending-up',
-    color: '#14b8a6',
-  },
-  {
-    label: 'Bids Placed',
-    value: '34',
-    change: 31,
-    icon: 'target',
-    color: '#f97316',
-  },
-  {
-    label: 'Win Rate',
-    value: '82%',
-    change: 5,
-    icon: 'trophy',
-    color: '#6366f1',
-  },
-];
 
 type DateRangeMode = 'today' | 'week' | 'month' | 'quarter' | 'year';
 type CompareMode = 'previous-month' | 'last-year';
@@ -103,10 +46,21 @@ export default function DashboardScreen() {
   const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>('month');
   const [compareMode, setCompareMode] = useState<CompareMode>('previous-month');
   const [orbColor, setOrbColor] = useState('#1E6FF7');
+  const [statsData, setStatsData] = useState<{
+    active_jobs: number; completed_jobs: number; total_jobs: number;
+    win_rate: number; rating: number | null; rating_count: number;
+  } | null>(null);
+  const [earningsData, setEarningsData] = useState<{
+    this_month: number; last_month: number; total_earned: number;
+  } | null>(null);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useEffect(() => { loadSettings(); }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [])
+  );
 
   const loadSettings = async () => {
     try {
@@ -116,6 +70,35 @@ export default function DashboardScreen() {
       console.error('Error loading settings:', error);
     }
   };
+
+  const loadDashboard = async () => {
+    try {
+      const [statsRes, earningsRes] = await Promise.all([
+        jobsAPI.stats(),
+        jobsAPI.earnings(),
+      ]);
+      setStatsData(statsRes.data);
+      setEarningsData(earningsRes.data);
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+    }
+  };
+
+  // Build real stats array from API data
+  const avgPerJob = statsData && earningsData && statsData.completed_jobs > 0
+    ? earningsData.total_earned / statsData.completed_jobs
+    : 0;
+
+  const STATS: Stat[] = [
+    { label: 'This Month', value: earningsData ? `€${earningsData.this_month.toFixed(0)}` : '—', change: 0, icon: 'cash', color: '#10b981' },
+    { label: 'Rating', value: statsData?.rating ? statsData.rating.toString() : '—', change: 0, icon: 'star', color: '#f59e0b' },
+    { label: 'Active Jobs', value: statsData ? statsData.active_jobs.toString() : '—', change: 0, icon: 'briefcase', color: '#3b82f6' },
+    { label: 'Completed', value: statsData ? statsData.completed_jobs.toString() : '—', change: 0, icon: 'check-circle', color: '#06b6d4' },
+    { label: 'Avg per Job', value: avgPerJob > 0 ? `€${avgPerJob.toFixed(0)}` : '—', change: 0, icon: 'trending-up', color: '#14b8a6' },
+    { label: 'Total Jobs', value: statsData ? statsData.total_jobs.toString() : '—', change: 0, icon: 'clipboard-list', color: '#8b5cf6' },
+    { label: 'Total Earned', value: earningsData ? `€${earningsData.total_earned.toFixed(0)}` : '—', change: 0, icon: 'wallet', color: '#f97316' },
+    { label: 'Win Rate', value: statsData ? `${statsData.win_rate}%` : '—', change: 0, icon: 'trophy', color: '#6366f1' },
+  ];
 
   const getDateRange = (): { from: Date; to: Date } => {
     const today = new Date();

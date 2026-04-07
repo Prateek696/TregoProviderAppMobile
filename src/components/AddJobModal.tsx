@@ -9,10 +9,12 @@ import {
     ScrollView,
     Platform,
     Alert,
+    ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { contactsAPI, jobsAPI, getAPIError } from '../services/api';
+import { mapBackendJob } from '../services/jobActions';
 
-// Mock Data
 const JOB_TYPES = [
     { value: 'house-cleaning', label: 'House Cleaning', duration: 120, price: 80 },
     { value: 'deep-cleaning', label: 'Deep Cleaning', duration: 240, price: 150 },
@@ -24,11 +26,6 @@ const JOB_TYPES = [
     { value: 'custom', label: 'Custom Job', duration: 120, price: 80 }
 ];
 
-const MOCK_CLIENTS = [
-    { id: '1', firstName: 'Sarah', lastName: 'Williams', phone: '+351 912 345 678', address: '123 Main St', city: 'Lisbon', type: 'individual' },
-    { id: '2', firstName: 'Michael', lastName: 'Thompson', phone: '+351 999 888 777', address: '456 Oak Ave', city: 'Porto', type: 'individual' },
-    { id: '3', businessName: 'Tech Corp', nif: '500111222', phone: '+351 211 222 333', address: '789 Biz Blvd', city: 'Lisbon', type: 'business' },
-];
 
 const COLORS = {
     background: '#0f172a',
@@ -52,6 +49,9 @@ export default function AddJobModal({ visible, onClose, onJobCreated }: AddJobMo
     const [currentStep, setCurrentStep] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedClient, setSelectedClient] = useState<any>(null);
+    const [clientsList, setClientsList] = useState<any[]>([]);
+    const [loadingClients, setLoadingClients] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
     // Job Form
     const [jobForm, setJobForm] = useState({
@@ -108,14 +108,37 @@ export default function AddJobModal({ visible, onClose, onJobCreated }: AddJobMo
                 city: '',
                 postalCode: ''
             });
+            loadClients();
         }
     }, [visible]);
 
-    const filteredClients = MOCK_CLIENTS.filter(c =>
+    const loadClients = async () => {
+        setLoadingClients(true);
+        try {
+            const res = await contactsAPI.list();
+            setClientsList(res.data.contacts.map((c: any) => ({
+                id: c.id,
+                firstName: c.name?.split(' ')[0] || c.name,
+                lastName: c.name?.split(' ').slice(1).join(' ') || '',
+                businessName: c.business_name || '',
+                phone: c.phone || c.phones?.[0]?.number || '',
+                nif: c.nif || '',
+                address: c.address || '',
+                city: c.city || '',
+                type: c.nif ? 'business' : 'individual',
+            })));
+        } catch {
+            // silently fail — user can still create a new client
+        } finally {
+            setLoadingClients(false);
+        }
+    };
+
+    const filteredClients = clientsList.filter(c =>
         c.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phone.includes(searchTerm)
+        c.phone?.includes(searchTerm)
     );
 
     const handleJobTypeSelect = (type: string) => {
@@ -133,23 +156,72 @@ export default function AddJobModal({ visible, onClose, onJobCreated }: AddJobMo
         }
     };
 
-    const handleCreateClient = () => {
-        const client = {
-            id: Date.now().toString(),
-            ...newClient,
-        };
-        setSelectedClient(client);
-        setIsCreatingClient(false);
+    const handleCreateClient = async () => {
+        const name = newClient.type === 'individual'
+            ? `${newClient.firstName} ${newClient.lastName}`.trim()
+            : newClient.businessName;
+        if (!name) { Alert.alert('Name is required'); return; }
+        try {
+            const res = await contactsAPI.create({
+                name,
+                phone: newClient.phone,
+                email: newClient.email,
+                nif: newClient.nif,
+                notes: newClient.address ? `${newClient.address}, ${newClient.city}` : '',
+            });
+            const c = res.data.contact;
+            const mapped = {
+                id: c.id,
+                firstName: newClient.firstName,
+                lastName: newClient.lastName,
+                businessName: newClient.businessName,
+                phone: newClient.phone,
+                nif: newClient.nif,
+                address: newClient.address,
+                city: newClient.city,
+                type: newClient.type,
+            };
+            setClientsList(prev => [mapped, ...prev]);
+            setSelectedClient(mapped);
+            setIsCreatingClient(false);
+        } catch (err) {
+            Alert.alert('Error', getAPIError(err));
+        }
     };
 
-    const handleSubmit = () => {
-        onJobCreated({
-            id: Date.now().toString(),
-            client: selectedClient,
-            ...jobForm,
-            status: 'confirmed'
-        });
-        onClose();
+    const handleSubmit = async () => {
+        if (!selectedClient) return;
+        setSubmitting(true);
+        try {
+            const clientName = selectedClient.firstName
+                ? `${selectedClient.firstName} ${selectedClient.lastName}`.trim()
+                : selectedClient.businessName;
+            // Build a rich text string — AI parser will extract structure
+            const raw_text = [
+                `Client: ${clientName}`,
+                selectedClient.phone ? `Phone: ${selectedClient.phone}` : '',
+                `Service: ${jobForm.description}`,
+                `Date: ${jobForm.date} at ${jobForm.time}`,
+                jobForm.price ? `Price: €${jobForm.price}` : '',
+                selectedClient.address ? `Address: ${selectedClient.address}, ${selectedClient.city}` : '',
+                jobForm.notes ? `Notes: ${jobForm.notes}` : '',
+            ].filter(Boolean).join(', ');
+
+            const res = await jobsAPI.createText(raw_text);
+            // Immediately update with exact structured fields
+            await jobsAPI.update(res.data.job.id, {
+                exec_status: 'confirmed',
+                price: jobForm.price ? parseFloat(jobForm.price) : undefined,
+                scheduled_at: `${jobForm.date}T${jobForm.time}:00`,
+                notes: jobForm.notes,
+            });
+            onJobCreated(res.data.job);
+            onClose();
+        } catch (err) {
+            Alert.alert('Error creating job', getAPIError(err));
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     // --- Calendar Logic ---
@@ -235,6 +307,10 @@ export default function AddJobModal({ visible, onClose, onJobCreated }: AddJobMo
                             onChangeText={setSearchTerm}
                         />
                     </View>
+
+                    {loadingClients && (
+                        <ActivityIndicator size="small" color={COLORS.primary} style={{ marginBottom: 12 }} />
+                    )}
 
                     {searchTerm.length > 0 && (
                         <View style={styles.resultsList}>
@@ -579,18 +655,21 @@ export default function AddJobModal({ visible, onClose, onJobCreated }: AddJobMo
                             </TouchableOpacity>
                         ) : (<View />)}
                         <TouchableOpacity
-                            style={[styles.continueButton, !selectedClient && currentStep === 1 && { opacity: 0.5 }]}
-                            disabled={!selectedClient && currentStep === 1}
+                            style={[styles.continueButton, (!selectedClient && currentStep === 1 || submitting) && { opacity: 0.5 }]}
+                            disabled={(!selectedClient && currentStep === 1) || submitting}
                             onPress={() => {
                                 if (currentStep < 4) setCurrentStep(currentStep + 1);
                                 else handleSubmit();
                             }}
                         >
-                            {currentStep === 4 ? (
+                            {currentStep === 4 && !submitting && (
                                 <Icon name="check-circle-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
-                            ) : null}
-                            <Text style={styles.continueButtonText}>{currentStep === 4 ? 'Create Job' : 'Continue'}</Text>
-                            {currentStep < 4 && <Icon name="arrow-right" size={16} color="#fff" style={{ marginLeft: 8 }} />}
+                            )}
+                            {submitting
+                                ? <ActivityIndicator size="small" color="#000" />
+                                : <Text style={styles.continueButtonText}>{currentStep === 4 ? 'Create Job' : 'Continue'}</Text>
+                            }
+                            {currentStep < 4 && !submitting && <Icon name="arrow-right" size={16} color="#fff" style={{ marginLeft: 8 }} />}
                         </TouchableOpacity>
                     </View>
                 </View>

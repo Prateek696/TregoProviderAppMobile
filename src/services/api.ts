@@ -9,7 +9,7 @@ import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 // ─── Config ──────────────────────────────────────────────────────────────────
 // Change this to your Render URL when deployed
 export const API_BASE_URL = __DEV__
-  ? 'http://10.0.2.2:3001' // Android emulator → localhost
+  ? 'http://192.168.1.11:3001' // Mac LAN IP — works for both emulator and physical device on same WiFi
   : 'https://tregoproviderappmobile.onrender.com';
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
@@ -99,20 +99,26 @@ export const jobsAPI = {
     status: string;
     exec_status: string;
     cancellation_reason: string;
+    client_id: string;
   }>) => client.put<{ job: any }>(`/jobs/${id}`, data),
 
-  uploadPhoto: (id: string, imagePath: string) => {
+  uploadPhoto: (id: string, imagePath: string, phase: 'before' | 'during' | 'after' = 'during', source: 'provider' | 'client' = 'provider') => {
     const form = new FormData();
     form.append('photo', {
       uri: imagePath,
       name: 'photo.jpg',
       type: 'image/jpeg',
     } as any);
-    return client.post<{ job: any }>(`/jobs/${id}/photo`, form, {
+    form.append('phase', phase);
+    form.append('source', source);
+    return client.post<{ photo: any }>(`/jobs/${id}/photo`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,
     });
   },
+
+  getPhotos: (id: string) =>
+    client.get<{ photos: Array<{ id: string; photo_url: string; phase: string; source: string; captured_at: string; created_at: string }> }>(`/jobs/${id}/photos`),
 
   bill: (id: string) =>
     client.post<{ job: any; invoice: any }>(`/jobs/${id}/bill`),

@@ -49,6 +49,9 @@ export interface Job {
   notes?: string | string[];
   recentlyRescheduled?: boolean;
   rescheduledAt?: string;
+  autoScheduled?: boolean;
+  scheduleMessage?: string;
+  estimatedDurationMinutes?: number;
   [key: string]: any; // Allow additional fields
 }
 

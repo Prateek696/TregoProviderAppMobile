@@ -239,8 +239,13 @@ export default function AuthScreen() {
         const { token, provider, isNew } = res.data;
         await jsonStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
         await jsonStorage.setItem(STORAGE_KEYS.PROVIDER_PROFILE, provider);
+        // If provider already has a name/service, they completed onboarding before
+        const hasProfile = !!(provider?.name || provider?.assistant_name || provider?.services?.length);
+        if (hasProfile) {
+          await jsonStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, true);
+        }
         registerPushToken();
-        navigation.replace(isNew ? 'Onboarding' : 'Main');
+        navigation.replace((isNew && !hasProfile) ? 'Onboarding' : 'Main');
       } else {
         // Email OTP — mock (not in MVP)
         await jsonStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'mock-otp-token');

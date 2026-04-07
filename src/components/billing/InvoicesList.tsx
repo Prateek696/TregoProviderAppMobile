@@ -15,8 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Picker } from '@react-native-picker/picker';
-import { loadInvoices } from '../../shared/utils/billingStorage';
-import { Invoice } from '../../shared/types/billingTypes';
+import { invoicesAPI } from '../../services/api';
 
 interface InvoicesListProps {
     onBack: () => void;
@@ -31,7 +30,7 @@ export default function InvoicesList({
     filter = 'all',
     orbColor = '#1E6FF7',
 }: InvoicesListProps) {
-    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [invoices, setInvoices] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>(filter === 'all' ? 'all' : filter.toUpperCase());
     const [showStatusPicker, setShowStatusPicker] = useState(false);
@@ -41,8 +40,12 @@ export default function InvoicesList({
     }, []);
 
     const loadData = async () => {
-        const loadedInvoices = await loadInvoices();
-        setInvoices(loadedInvoices);
+        try {
+            const res = await invoicesAPI.list();
+            setInvoices(res.data.invoices);
+        } catch (err) {
+            console.error('Failed to load invoices:', err);
+        }
     };
 
     const getStatusColor = (status: Invoice['status']) => {

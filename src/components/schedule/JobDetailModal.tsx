@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -9,10 +9,15 @@ import {
     Image,
     Dimensions,
     Linking,
-    StatusBar
+    StatusBar,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { BlurView } from '@react-native-community/blur';
+import { useNavigation } from '@react-navigation/native';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { jobsAPI } from '../../services/api';
 
 interface JobDetailModalProps {
     visible: boolean;
@@ -38,6 +43,64 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
     onStatusChange
 }) => {
     const [activeTab, setActiveTab] = useState('details');
+    const [photos, setPhotos] = useState<Array<{ uri: string; phase: string }>>([]);
+    const [uploading, setUploading] = useState(false);
+    const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+
+    const navigation = useNavigation<any>();
+
+    // Fetch all photos for this job when modal opens
+    useEffect(() => {
+        if (visible && job?.id) {
+            jobsAPI.getPhotos(job.id)
+                .then(res => setPhotos(res.data.photos.map((p: any) => ({ uri: p.photo_url, phase: p.phase || 'during' }))))
+                .catch(() => { if (job.photoUrl) setPhotos([{ uri: job.photoUrl, phase: 'during' }]); });
+        }
+    }, [visible, job?.id]);
+
+    const handleAddPhoto = () => {
+        // Step 1 — pick phase
+        Alert.alert('Photo Type', 'When was this photo taken?', [
+            { text: 'Before', onPress: () => pickSource('before') },
+            { text: 'During', onPress: () => pickSource('during') },
+            { text: 'After',  onPress: () => pickSource('after') },
+            { text: 'Cancel', style: 'cancel' },
+        ]);
+    };
+
+    const pickSource = (phase: 'before' | 'during' | 'after') => {
+        // Step 2 — pick camera or gallery
+        Alert.alert('Add Photo', 'Choose source', [
+            {
+                text: 'Camera',
+                onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+                    if (res.assets?.[0]?.uri) await uploadPhoto(res.assets[0].uri, phase);
+                }),
+            },
+            {
+                text: 'Gallery',
+                onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+                    if (res.assets?.[0]?.uri) await uploadPhoto(res.assets[0].uri, phase);
+                }),
+            },
+            { text: 'Cancel', style: 'cancel' },
+        ]);
+    };
+
+    const uploadPhoto = async (uri: string, phase: 'before' | 'during' | 'after') => {
+        try {
+            setUploading(true);
+            // Optimistically show the local URI immediately
+            setPhotos(prev => [...prev, { uri, phase }]);
+            await jobsAPI.uploadPhoto(job.id, uri, phase);
+        } catch {
+            // Remove the optimistic photo on failure
+            setPhotos(prev => prev.filter(p => p.uri !== uri));
+            Alert.alert('Upload failed', 'Could not upload photo. Please try again.');
+        } finally {
+            setUploading(false);
+        }
+    };
 
     if (!job) return null;
 
@@ -60,32 +123,19 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
             case 'urgent': return '#ef4444';
             case 'high': return '#f97316';
             case 'medium': return '#eab308';
+            case 'normal': return '#3b82f6';
             case 'low': return '#22c55e';
-            default: return '#6b7280';
+            default: return '#3b82f6';
         }
     };
 
-    // Mock Data Generators (to match Web's mock data)
-    const clientInfo = {
-        name: job.client || 'Unknown Client',
-        type: 'Individual',
-        phone: job.clientPhone || '+351 912 345 678',
-        email: `${(job.client || 'client').toLowerCase().replace(' ', '.')}@email.com`,
-        rating: 4.9,
-        completedJobs: 12,
-        totalSpent: '€3,450',
-        memberSince: 'March 2024',
-        paymentMethod: 'Visa •••• 4521',
-        serviceAddress: job.location || 'Unknown Address',
-        notes: 'Prefers morning appointments. Has a dog.'
-    };
+    const clientPhone = job.phoneNumber || job.clientPhone || null;
+    const clientEmail = job.clientEmail || null;
 
-    const jobTimeline = [
-        { event: 'Job Posted', date: 'Oct 18, 2024 • 8:00 AM', icon: 'package-variant' },
-        { event: 'Bid Submitted', date: 'Oct 18, 2024 • 9:15 AM', icon: 'file-document-outline' },
-        { event: 'Accepted by Client', date: 'Oct 18, 2024 • 10:30 AM', icon: 'check-circle-outline' },
-        { event: 'Scheduled', date: 'Jan 21, 2026 • 7:01 PM', icon: 'calendar-clock' },
-    ];
+    const rawDate = job.scheduledDate || job.date;
+    const scheduledDate = rawDate
+        ? new Date(rawDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+        : null;
 
     // Render Helpers
     const renderSectionHeader = (icon: string, title: string, rightElement?: React.ReactNode) => (
@@ -131,24 +181,6 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
                 <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
 
-                    {/* Quick Actions Bar */}
-                    <View style={styles.quickActionsContainer}>
-                        <Text style={styles.sectionTitleSmall}>Contact Client</Text>
-                        <View style={styles.actionButtonsRow}>
-                            <TouchableOpacity style={styles.actionButton} onPress={onMessage}>
-                                <Icon name="message-text-outline" size={18} color="#fff" />
-                                <Text style={styles.actionButtonText}>Message</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.actionButton} onPress={onCall}>
-                                <Icon name="phone-outline" size={18} color="#fff" />
-                                <Text style={styles.actionButtonText}>Call</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#3b82f6', borderColor: '#3b82f6' }]} onPress={onNavigate}>
-                                <Icon name="navigation-variant-outline" size={18} color="#fff" />
-                                <Text style={styles.actionButtonText}>Navigate</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
 
                     {/* Scheduling Section */}
                     <View style={styles.card}>
@@ -156,25 +188,22 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                         <View style={styles.grid}>
                             <View style={styles.gridItem}>
                                 <Text style={styles.gridLabel}>Start Time</Text>
-                                <Text style={styles.gridValue}>{job.time}</Text>
-                            </View>
-                            <View style={styles.gridItem}>
-                                <Text style={styles.gridLabel}>End Time</Text>
-                                <Text style={styles.gridValue}>{job.endTime}</Text>
+                                <Text style={styles.gridValue}>{job.scheduledTime || job.time || '—'}</Text>
                             </View>
                             <View style={styles.gridItem}>
                                 <Text style={styles.gridLabel}>Duration</Text>
-                                <Text style={styles.gridValue}>{job.duration} min</Text>
+                                <Text style={styles.gridValue}>{job.estimatedDurationMinutes || job.duration || 60} min</Text>
                             </View>
                         </View>
                         <View style={styles.divider} />
-                        <View style={styles.row}>
-                            <View>
-                                <Text style={styles.gridLabel}>Date</Text>
-                                <Text style={styles.gridValue}>Wednesday, January 21, 2026</Text>
-                                <Text style={styles.subText}>Posted 1 week ago</Text>
+                        {scheduledDate && (
+                            <View style={styles.row}>
+                                <View>
+                                    <Text style={styles.gridLabel}>Date</Text>
+                                    <Text style={styles.gridValue}>{scheduledDate}</Text>
+                                </View>
                             </View>
-                        </View>
+                        )}
 
                         {/* Job Actions */}
                         <View style={styles.jobActionsRow}>
@@ -182,14 +211,14 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                                 <Icon name="calendar-refresh" size={16} color="#fff" />
                                 <Text style={styles.secondaryButtonText}>Reschedule</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.secondaryButton}>
+                            <TouchableOpacity style={styles.secondaryButton} onPress={() => { onClose(); navigation.navigate('Calendar'); }}>
                                 <Icon name="calendar-month" size={16} color="#fff" />
                                 <Text style={styles.secondaryButtonText}>View Calendar</Text>
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity
                             style={[styles.primaryButton, { backgroundColor: '#3b82f6' }]}
-                            onPress={() => onStatusChange && onStatusChange(job.id, 'en_route')}
+                            onPress={() => onStatusChange && onStatusChange(job.id, 'en-route')}
                         >
                             <Icon name="play" size={20} color="#fff" />
                             <Text style={styles.primaryButtonText}>Resume Job</Text>
@@ -214,207 +243,167 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
                     {/* Job Details Section */}
                     <View style={styles.card}>
-                        <View style={styles.sectionHeader}>
-                            <View style={styles.sectionHeaderLeft}>
-                                <Icon name="file-document-outline" size={20} color={orbColor} />
-                                <Text style={styles.sectionTitle}>Job Details</Text>
-                            </View>
-                            <View style={styles.priceTag}>
-                                <Icon name="currency-usd" size={16} color="#15803d" />
-                            </View>
-                        </View>
+                        {renderSectionHeader('file-document-outline', 'Job Details')}
 
-                        <View style={styles.tagsRow}>
-                            <View style={styles.tag}>
-                                <Icon name="briefcase-outline" size={12} color={orbColor} />
-                                <Text style={[styles.tagText, { color: orbColor }]}>Fixed Price</Text>
+                        {job.category && (
+                            <View style={styles.tagsRow}>
+                                <View style={styles.tag}>
+                                    <Text style={[styles.tagText, { color: '#3b82f6' }]}>{job.category}</Text>
+                                </View>
                             </View>
-                            <View style={styles.tag}>
-                                <Text style={[styles.tagText, { color: '#3b82f6' }]}>{job.category || 'Service'}</Text>
-                            </View>
-                        </View>
+                        )}
 
-                        <View style={styles.detailBlock}>
-                            <Text style={styles.detailLabel}>SUMMARY DESCRIPTION</Text>
-                            <View style={styles.detailBox}>
-                                <Text style={styles.detailText}>{job.description}</Text>
+                        {job.description ? (
+                            <View style={styles.detailBlock}>
+                                <Text style={styles.detailLabel}>DESCRIPTION</Text>
+                                <View style={styles.detailBox}>
+                                    <Text style={styles.detailText}>{job.description}</Text>
+                                </View>
                             </View>
-                        </View>
+                        ) : null}
 
-                        <View style={styles.detailBlock}>
-                            <Text style={styles.detailLabel}>FULL DESCRIPTION (CLIENT DETAILS)</Text>
-                            <View style={[styles.detailBox, { minHeight: 80 }]}>
-                                <Text style={styles.detailText}>{job.description}</Text>
+                        {job.notes ? (
+                            <View style={styles.detailBlock}>
+                                <Text style={styles.detailLabel}>NOTES</Text>
+                                <View style={styles.detailBox}>
+                                    <Text style={styles.detailText}>{job.notes}</Text>
+                                </View>
                             </View>
-                        </View>
+                        ) : null}
 
                         <View style={styles.infoList}>
-                            <View style={styles.infoListItem}>
-                                <Icon name="clock-outline" size={16} color="#9ca3af" />
-                                <Text style={styles.infoListText}>Estimated Duration</Text>
-                            </View>
-                            <View style={styles.infoListItem}>
-                                <Icon name="alert-circle-outline" size={16} color="#9ca3af" />
-                                <Text style={styles.infoListText}>Priority Level</Text>
-                                <View style={[styles.priorityBadge, { backgroundColor: '#fef3c7' }]}>
-                                    <Text style={[styles.priorityText, { color: '#d97706' }]}>MEDIUM</Text>
+                            {job.priority && (
+                                <View style={styles.infoListItem}>
+                                    <Icon name="alert-circle-outline" size={16} color="#9ca3af" />
+                                    <Text style={styles.infoListText}>Priority</Text>
+                                    <View style={[styles.priorityBadge, { backgroundColor: `${getPriorityColor(job.priority)}33` }]}>
+                                        <Text style={[styles.priorityText, { color: getPriorityColor(job.priority) }]}>{job.priority.toUpperCase()}</Text>
+                                    </View>
                                 </View>
-                            </View>
-                            <View style={styles.infoListItem}>
-                                <Icon name="calendar-blank-outline" size={16} color="#9ca3af" />
-                                <Text style={styles.infoListText}>Posted</Text>
-                            </View>
+                            )}
+                            {job.estimatedPrice && (
+                                <View style={styles.infoListItem}>
+                                    <Icon name="currency-eur" size={16} color="#9ca3af" />
+                                    <Text style={styles.infoListText}>Price</Text>
+                                    <Text style={[styles.infoListText, { color: '#10b981' }]}>{job.estimatedPrice}</Text>
+                                </View>
+                            )}
                         </View>
 
-                        {/* Photos Section */}
-                        <View style={styles.photosSection}>
-                            <View style={styles.photosHeader}>
-                                <Icon name="camera-outline" size={16} color={orbColor} />
-                                <Text style={styles.photosTitle}>Client Photos</Text>
-                                <View style={styles.photoCountBadge}>
-                                    <Text style={styles.photoCountText}>3</Text>
-                                </View>
-                            </View>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
-                                {[1, 2, 3].map((i) => (
-                                    <View key={i} style={styles.photoPlaceholder}>
-                                        <Image
-                                            source={{ uri: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400' }}
-                                            style={styles.photo}
-                                        />
-                                    </View>
+                    </View>
+
+                    {/* Photos Card */}
+                    <View style={styles.card}>
+                        {renderSectionHeader('camera-outline', 'Photos', (
+                            <TouchableOpacity
+                                style={styles.addPhotoBtn}
+                                onPress={handleAddPhoto}
+                                disabled={uploading}>
+                                {uploading
+                                    ? <ActivityIndicator size="small" color="#fff" />
+                                    : <><Icon name="plus" size={14} color="#fff" /><Text style={styles.addPhotoBtnText}>Add</Text></>
+                                }
+                            </TouchableOpacity>
+                        ))}
+                        {photos.length === 0 ? (
+                            <TouchableOpacity style={styles.emptyPhotos} onPress={handleAddPhoto}>
+                                <Icon name="camera-plus-outline" size={32} color="#334155" />
+                                <Text style={styles.emptyPhotosText}>Tap to add a photo</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                                {photos.map((p, i) => (
+                                    <TouchableOpacity key={i} style={styles.photoThumb} onPress={() => setViewingPhoto(p.uri)}>
+                                        <Image source={{ uri: p.uri }} style={styles.photo} resizeMode="cover" />
+                                        <View style={[styles.phaseBadge, p.phase === 'before' ? styles.phaseBefore : p.phase === 'after' ? styles.phaseAfter : styles.phaseDuring]}>
+                                            <Text style={styles.phaseBadgeText}>{p.phase}</Text>
+                                        </View>
+                                    </TouchableOpacity>
                                 ))}
+                                <TouchableOpacity style={styles.addMoreThumb} onPress={handleAddPhoto}>
+                                    <Icon name="plus" size={24} color="#334155" />
+                                </TouchableOpacity>
                             </ScrollView>
-                        </View>
+                        )}
                     </View>
 
                     {/* Location Section */}
-                    <View style={styles.card}>
-                        {renderSectionHeader('map-marker-outline', 'Location')}
-                        <Text style={styles.addressTitle}>Service Address</Text>
-                        <Text style={styles.addressText}>{job.location}</Text>
-                        <View style={styles.distanceRow}>
-                            <Icon name="map-marker-distance" size={14} color="#9ca3af" />
-                            <Text style={styles.distanceText}>5.7 km away</Text>
+                    {(job.address || job.location) && (
+                        <View style={styles.card}>
+                            {renderSectionHeader('map-marker-outline', 'Location')}
+                            <Text style={styles.addressText}>{job.address || job.location}</Text>
                         </View>
-                    </View>
+                    )}
 
                     {/* Client Information */}
-                    <View style={styles.card}>
-                        {renderSectionHeader('account-outline', 'Client Information')}
-                        <View style={styles.clientProfile}>
-                            <View style={[styles.avatar, { backgroundColor: '#3b82f6' }]}>
-                                <Text style={styles.avatarText}>{clientInfo.name.substring(0, 2).toUpperCase()}</Text>
-                            </View>
-                            <View>
-                                <Text style={styles.clientName}>{clientInfo.name}</Text>
-                                <View style={styles.ratingRow}>
-                                    <Icon name="star" size={12} color="#facc15" />
-                                    <Text style={styles.ratingText}>4.9 • 12 jobs</Text>
+                    {job.client && (
+                        <View style={styles.card}>
+                            {renderSectionHeader('account-outline', 'Client Information')}
+                            <View style={styles.clientProfile}>
+                                <View style={[styles.avatar, { backgroundColor: '#3b82f6' }]}>
+                                    <Text style={styles.avatarText}>{job.client.substring(0, 2).toUpperCase()}</Text>
                                 </View>
-                                <Text style={styles.clientRef}>#10285</Text>
+                                <Text style={styles.clientName}>{job.client}</Text>
+                            </View>
+                            <View style={styles.divider} />
+                            <View style={styles.clientDetails}>
+                                {clientPhone && (
+                                    <View style={styles.clientDetailRow}>
+                                        <Icon name="phone-outline" size={16} color="#9ca3af" />
+                                        <View>
+                                            <Text style={styles.clientDetailLabel}>Phone</Text>
+                                            <Text style={styles.clientDetailValueLink}>{clientPhone}</Text>
+                                        </View>
+                                    </View>
+                                )}
+                                {clientEmail && (
+                                    <View style={styles.clientDetailRow}>
+                                        <Icon name="email-outline" size={16} color="#9ca3af" />
+                                        <View>
+                                            <Text style={styles.clientDetailLabel}>Email</Text>
+                                            <Text style={styles.clientDetailValueLink}>{clientEmail}</Text>
+                                        </View>
+                                    </View>
+                                )}
+                                {job.clientNif && (
+                                    <View style={styles.clientDetailRow}>
+                                        <Icon name="file-document-outline" size={16} color="#9ca3af" />
+                                        <View>
+                                            <Text style={styles.clientDetailLabel}>NIF</Text>
+                                            <Text style={styles.clientDetailValue}>PT{job.clientNif}</Text>
+                                        </View>
+                                    </View>
+                                )}
                             </View>
                         </View>
-                        <View style={styles.divider} />
-                        <View style={styles.clientDetails}>
-                            <View style={styles.clientDetailRow}>
-                                <Icon name="phone-outline" size={16} color="#9ca3af" />
-                                <View>
-                                    <Text style={styles.clientDetailLabel}>Phone</Text>
-                                    <Text style={styles.clientDetailValueLink}>{clientInfo.phone}</Text>
-                                </View>
-                            </View>
-                            <View style={styles.clientDetailRow}>
-                                <Icon name="email-outline" size={16} color="#9ca3af" />
-                                <View>
-                                    <Text style={styles.clientDetailLabel}>Email</Text>
-                                    <Text style={styles.clientDetailValueLink}>{clientInfo.email}</Text>
-                                </View>
-                            </View>
-                            <View style={styles.clientDetailRow}>
-                                <Icon name="domain" size={16} color="#9ca3af" />
-                                <View>
-                                    <Text style={styles.clientDetailLabel}>Client Type</Text>
-                                    <Text style={styles.clientDetailValue}>Individual</Text>
-                                </View>
-                            </View>
-                            <View style={styles.clientDetailRow}>
-                                <Icon name="file-document-outline" size={16} color="#9ca3af" />
-                                <View>
-                                    <Text style={styles.clientDetailLabel}>NIF / VAT Number</Text>
-                                    <Text style={styles.clientDetailValue}>212345678</Text>
-                                </View>
-                            </View>
-                            <View style={styles.clientDetailRow}>
-                                <Icon name="chart-line" size={16} color="#9ca3af" />
-                                <View>
-                                    <Text style={styles.clientDetailLabel}>Total Spent</Text>
-                                    <Text style={styles.clientDetailValue}>{clientInfo.totalSpent}</Text>
-                                </View>
-                            </View>
-                        </View>
+                    )}
 
-                        <View style={styles.divider} />
-
-                        {/* Billing Address & Payment */}
-                        <View style={styles.clientDetails}>
-                            <View style={styles.clientDetailRow}>
-                                <Icon name="map-outline" size={16} color="#9ca3af" />
-                                <View>
-                                    <Text style={styles.clientDetailLabel}>Billing Address</Text>
-                                    <Text style={styles.clientDetailValue}>{job.location}</Text>
-                                </View>
-                            </View>
-                            <View style={styles.clientDetailRow}>
-                                <Icon name="credit-card-outline" size={16} color="#9ca3af" />
-                                <View>
-                                    <Text style={styles.clientDetailLabel}>Payment Method</Text>
-                                    <Text style={styles.clientDetailValue}>{clientInfo.paymentMethod}</Text>
-                                    <Text style={styles.verifiedText}>Verified</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                    </View>
 
                     {/* Timeline History */}
                     <View style={styles.card}>
                         {renderSectionHeader('history', 'Job Timeline')}
-                        <View style={styles.timelineContainer}>
-                            {jobTimeline.map((item, index) => (
-                                <View key={index} style={styles.timelineItem}>
-                                    <View style={styles.timelineIconContainer}>
-                                        <Icon name={item.icon} size={14} color="#3b82f6" />
-                                    </View>
-                                    <View style={styles.timelineContent}>
-                                        <Text style={styles.timelineEvent}>{item.event}</Text>
-                                        <Text style={styles.timelineDate}>{item.date}</Text>
-                                    </View>
-                                </View>
-                            ))}
-                        </View>
+                        <Text style={{ color: '#64748b', fontSize: 13 }}>No timeline events yet.</Text>
                     </View>
 
-                    {/* Expenses List Check */}
+                    {/* Expenses */}
                     <View style={styles.card}>
-                        <View style={styles.sectionHeader}>
-                            <View style={styles.sectionHeaderLeft}>
-                                <Icon name="wallet-outline" size={20} color={orbColor} />
-                                <Text style={styles.sectionTitle}>Job Expenses</Text>
-                            </View>
-                        </View>
-                        <View style={styles.expenseRow}>
-                            <Text style={styles.expenseDate}>Oct 19, 2024</Text>
-                            <View style={styles.expenseBadge} />
-                        </View>
-                        <View style={styles.expenseRow}>
-                            <Text style={styles.expenseDate}>Oct 19, 2024</Text>
-                            <View style={styles.expenseBadge} />
-                        </View>
+                        {renderSectionHeader('wallet-outline', 'Job Expenses')}
+                        <Text style={{ color: '#64748b', fontSize: 13 }}>No expenses recorded.</Text>
                     </View>
 
                 </ScrollView>
             </View>
+        {/* Full-screen photo viewer */}
+        <Modal visible={!!viewingPhoto} transparent animationType="fade" onRequestClose={() => setViewingPhoto(null)}>
+            <View style={styles.photoViewer}>
+                <TouchableOpacity style={styles.photoViewerClose} onPress={() => setViewingPhoto(null)}>
+                    <Icon name="close" size={28} color="#fff" />
+                </TouchableOpacity>
+                {viewingPhoto && (
+                    <Image source={{ uri: viewingPhoto }} style={styles.photoViewerImage} resizeMode="contain" />
+                )}
+            </View>
+        </Modal>
         </Modal>
     );
 };
@@ -644,15 +633,17 @@ const styles = StyleSheet.create({
     infoListItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: '#1e293b',
         padding: 12,
         borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#334155',
         gap: 8,
     },
     infoListText: {
         flex: 1,
         fontSize: 13,
-        color: '#475569',
+        color: '#94a3b8',
     },
     priorityBadge: {
         paddingHorizontal: 6,
@@ -663,44 +654,47 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '700',
     },
-    photosSection: {
-        marginTop: 8,
+    addPhotoBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        backgroundColor: '#1e293b', paddingHorizontal: 10, paddingVertical: 5,
+        borderRadius: 6, borderWidth: 1, borderColor: '#334155',
     },
-    photosHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginBottom: 12,
+    addPhotoBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+    emptyPhotos: {
+        alignItems: 'center', justifyContent: 'center', gap: 8,
+        backgroundColor: '#1e293b', borderRadius: 8, borderWidth: 1,
+        borderColor: '#334155', borderStyle: 'dashed', padding: 24,
     },
-    photosTitle: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#fff',
+    emptyPhotosText: { color: '#64748b', fontSize: 13 },
+    photoThumb: {
+        width: 100, height: 100, borderRadius: 8,
+        overflow: 'hidden', marginRight: 8,
     },
-    photoCountBadge: {
-        backgroundColor: '#334155',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 10,
+    photo: { width: '100%', height: '100%' },
+    phaseBadge: {
+        position: 'absolute', bottom: 4, left: 4,
+        paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
     },
-    photoCountText: {
-        fontSize: 10,
-        color: '#fff',
-        fontWeight: '700',
+    phaseBefore: { backgroundColor: 'rgba(239,68,68,0.85)' },
+    phaseDuring: { backgroundColor: 'rgba(59,130,246,0.85)' },
+    phaseAfter:  { backgroundColor: 'rgba(16,185,129,0.85)' },
+    phaseBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700', textTransform: 'uppercase' },
+    photoViewer: {
+        flex: 1, backgroundColor: 'rgba(0,0,0,0.95)',
+        alignItems: 'center', justifyContent: 'center',
     },
-    photosScroll: {
-        flexDirection: 'row',
+    photoViewerClose: {
+        position: 'absolute', top: 48, right: 20, zIndex: 10,
+        backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, padding: 6,
     },
-    photoPlaceholder: {
-        width: 120,
-        height: 80,
-        marginRight: 8,
-        borderRadius: 8,
-        overflow: 'hidden',
+    photoViewerImage: {
+        width: width, height: height * 0.8,
     },
-    photo: {
-        width: '100%',
-        height: '100%',
+    addMoreThumb: {
+        width: 100, height: 100, borderRadius: 8,
+        backgroundColor: '#1e293b', borderWidth: 1,
+        borderColor: '#334155', borderStyle: 'dashed',
+        alignItems: 'center', justifyContent: 'center',
     },
     addressTitle: {
         fontSize: 13,
@@ -837,9 +831,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#fff',
+        backgroundColor: '#1e293b',
         padding: 12,
         borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#334155',
         marginBottom: 8,
         height: 48,
     },

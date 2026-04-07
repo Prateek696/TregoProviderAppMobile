@@ -592,6 +592,33 @@ export default function SettingsScreen() {
               {renderSectionItem('help-circle-outline', 'Help', 'Support, guides, and help center', () => setCurrentSection('help'))}
             </View>
 
+            {/* Logout */}
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={() =>
+                Alert.alert(
+                  'Log Out',
+                  'Are you sure you want to log out?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Log Out',
+                      style: 'destructive',
+                      onPress: async () => {
+                        await jsonStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+                        // Walk up to root navigator and reset to Auth
+                        let nav: any = navigation;
+                        while (nav.getParent?.()) nav = nav.getParent();
+                        nav.reset({ index: 0, routes: [{ name: 'Auth' }] });
+                      },
+                    },
+                  ]
+                )
+              }>
+              <Icon name="logout-variant" size={20} color={S_COLORS.danger} />
+              <Text style={styles.logoutText}>Log Out</Text>
+            </TouchableOpacity>
+
             <Text style={styles.versionText}>Trego Provider App v1.3.0</Text>
             <Text style={styles.copyrightText}>© 2026 Trego. All rights reserved.</Text>
             <View style={{ height: 40 }} />
@@ -842,6 +869,24 @@ const styles = StyleSheet.create({
   sectionDescription: {
     fontSize: 11,
     color: '#64748b',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 24,
+    paddingVertical: 15,
+    borderRadius: 14,
+    backgroundColor: '#2d0a0a',
+    borderWidth: 1,
+    borderColor: '#ef444440',
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: S_COLORS.danger,
   },
   versionText: {
     textAlign: 'center',

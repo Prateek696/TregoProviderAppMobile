@@ -15,6 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { requestOverlayPermission, hasOverlayPermission } from '../services/bubble';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { Button } from '../components/ui/Button';
@@ -414,6 +415,14 @@ export default function OnboardingScreen() {
         } as any);
       } catch (e) {
         console.warn('Onboarding: failed to sync profile to backend', e);
+      }
+
+      // Request overlay permission for floating bubble (if not already granted)
+      const hasOverlay = await hasOverlayPermission();
+      if (!hasOverlay) {
+        requestOverlayPermission();
+        // Brief delay so system dialog appears before we navigate away
+        await new Promise(r => setTimeout(r, 500));
       }
 
       // Navigate to main app

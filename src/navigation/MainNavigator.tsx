@@ -3,10 +3,14 @@
  * Icons match web version using MaterialCommunityIcons
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { showPersistentNotification, hidePersistentNotification, onRecordVoiceTap, onRecordTextTap } from '../services/notificationBar';
+import { DeviceEventEmitter } from 'react-native';
+import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
+import { showBubble, hideBubble, hasOverlayPermission } from '../services/bubble';
 import { MainTabParamList, MainStackParamList } from './types';
 
 // Screens
@@ -20,10 +24,12 @@ import ProfileCompletionScreen from '../screens/ProfileCompletionScreen';
 
 // Placeholder screens for navigation
 import JobDetailScreen from '../screens/JobDetailScreen';
+import JobEditScreen from '../screens/JobEditScreen';
 import ContactsScreen from '../screens/ContactsScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import EarningsScreen from '../screens/EarningsScreen';
 import ChatListScreen from '../screens/ChatListScreen';
+import ClientDetailScreen from '../screens/ClientDetailScreen';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<MainStackParamList>();
@@ -42,7 +48,12 @@ function JobsStack() {
       <Stack.Screen
         name="JobDetail"
         component={JobDetailScreen}
-        options={{ title: 'Job Details' }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="JobEdit"
+        component={JobEditScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
@@ -61,7 +72,7 @@ function JobsStack() {
 function TabNavigator() {
   return (
     <Tab.Navigator
-      initialRouteName="Chat"
+      initialRouteName="Contacts"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#3b82f6', // Web version blue #3b82f6
@@ -80,13 +91,13 @@ function TabNavigator() {
         },
       }}>
       <Tab.Screen
-        name="Chat"
-        component={ChatListScreen}
+        name="Contacts"
+        component={ContactsScreen}
         options={{
-          tabBarLabel: 'Messages',
+          tabBarLabel: 'Clients',
           tabBarIcon: ({ color, size, focused }) => (
             <Icon
-              name="message-text"
+              name="account-group"
               size={size || 24}
               color={color}
               style={{ marginTop: 4 }}
@@ -129,7 +140,7 @@ function TabNavigator() {
         component={BillingScreen}
         options={{
           tabBarLabel: 'Billing',
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, size }) => (
             <Icon
               name="wallet"
               size={size || 24}
@@ -162,6 +173,40 @@ function TabNavigator() {
  * Main Navigator - Combines tabs and stack navigation
  */
 export default function MainNavigator() {
+  const navigationRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Show persistent notification bar button — pass token so inline actions work without opening app
+    jsonStorage.getItem<string>(STORAGE_KEYS.AUTH_TOKEN).then(token => {
+      showPersistentNotification(token ?? undefined);
+    });
+
+    // Start floating bubble if overlay permission is already granted
+    hasOverlayPermission().then(granted => {
+      if (granted) showBubble();
+    });
+
+    // 🎤 Voice tap → navigate to Jobs tab (VoiceBubble is there) + open it
+    const unsubVoice = onRecordVoiceTap(() => {
+      navigationRef.current?.navigate('MainTabs', { screen: 'Jobs' });
+      // Small delay so the screen is mounted before we trigger the bubble
+      setTimeout(() => DeviceEventEmitter.emit('TregoOpenVoice'), 400);
+    });
+
+    // ✏️ Text tap → navigate to Jobs tab + open text input modal
+    const unsubText = onRecordTextTap(() => {
+      navigationRef.current?.navigate('MainTabs', { screen: 'Jobs' });
+      setTimeout(() => DeviceEventEmitter.emit('TregoOpenText'), 400);
+    });
+
+    return () => {
+      hidePersistentNotification();
+      hideBubble();
+      unsubVoice();
+      unsubText();
+    };
+  }, []);
+
   return (
     <Stack.Navigator
       screenOptions={{
@@ -175,6 +220,7 @@ export default function MainNavigator() {
       <Stack.Screen name="ChatList" component={ChatListScreen} />
       <Stack.Screen name="ChatDetail" component={ChatScreen} />
       <Stack.Screen name="ProfileCompletion" component={ProfileCompletionScreen} />
+      <Stack.Screen name="ClientDetail" component={ClientDetailScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

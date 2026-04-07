@@ -24,6 +24,11 @@ export type NotificationPayload = {
   type?: 'job_created' | 'job_updated' | 'digest' | 'post_call';
   title?: string;
   body?: string;
+  auto_scheduled?: string;   // 'true' | 'false' (FCM data values are strings)
+  schedule_message?: string;
+  job_id?: string;
+  duplicate_flag?: string;
+  duplicate_job_id?: string;
 };
 
 /**

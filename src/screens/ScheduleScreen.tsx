@@ -1,26 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainStackParamList } from '../navigation/types';
 import LinearTimeCalendar from '../components/schedule/LinearTimeCalendar';
 import StaticMapView from '../components/schedule/StaticMapView';
 import CalendarViewOptionsModal, { CalendarViewType } from '../components/schedule/CalendarViewOptionsModal';
 import DayTimer from '../components/schedule/DayTimer';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { dayStateStorage, jobStatusStorage, freeTimeNotesStorage, FreeTimeNote } from '../utils/scheduleStorage';
+import { useFocusEffect } from '@react-navigation/native';
+import { jobsAPI } from '../services/api';
+import { mapBackendJob } from '../services/jobActions';
 
 import DayStatsDropdown from '../components/schedule/DayStatsDropdown';
 import AddJobModal from '../components/schedule/AddJobModal';
-import { fullWeekDemoJobs } from '../shared/data/fullWeekJobsData';
+import { JobDetailModal } from '../components/schedule/JobDetailModal';
 import { formatDuration } from '../utils/scheduleCalculations';
 
 import Haptics from '../utils/haptics';
 
 export default function ScheduleScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<CalendarViewType>('day');
   const [modalVisible, setModalVisible] = useState(false);
   const [addJobModalVisible, setAddJobModalVisible] = useState(false);
-  const [addedJobs, setAddedJobs] = useState<any[]>([]);
+  const [selectedJob, setSelectedJob] = useState<any>(null);
+  const [allJobs, setAllJobs] = useState<any[]>([]);
 
   // Day state management
   const [isDayStarted, setIsDayStarted] = useState(false);
@@ -32,9 +40,26 @@ export default function ScheduleScreen() {
   // Free time notes management
   const [freeTimeNotes, setFreeTimeNotes] = useState<Record<string, FreeTimeNote>>({});
 
-  // Calculate Daily Stats
-  // Filter jobs for the selected date (combining demo jobs and locally added jobs)
-  const allJobs = [...fullWeekDemoJobs, ...addedJobs];
+  useFocusEffect(
+    useCallback(() => {
+      loadJobs();
+    }, [])
+  );
+
+  const loadJobs = async () => {
+    try {
+      const res = await jobsAPI.list();
+      setAllJobs(res.data.jobs.map(mapBackendJob));
+    } catch (err) {
+      console.error('ScheduleScreen: failed to load jobs', err);
+    }
+  };
+
+  const handleAddJob = (newJob: any) => {
+    setAllJobs(prev => [...prev, mapBackendJob(newJob)]);
+  };
+
+  // Calculate Daily Stats — filter for selected date
   const jobs = allJobs.filter(job => {
     if (!job.scheduledDate) return false;
     const jobDate = new Date(job.scheduledDate);
@@ -43,10 +68,6 @@ export default function ScheduleScreen() {
       jobDate.getMonth() === selectedDate.getMonth() &&
       jobDate.getFullYear() === selectedDate.getFullYear();
   });
-
-  const handleAddJob = (newJob: any) => {
-    setAddedJobs(prev => [...prev, newJob]);
-  };
 
   const totalJobs = jobs.length;
 
@@ -110,11 +131,35 @@ export default function ScheduleScreen() {
     dayStateStorage.setDayEnded(ended);
   };
 
-  const handleJobStatusChange = (jobId: string, newStatus: string) => {
+  const handleJobStatusChange = async (jobId: string, newStatus: string) => {
     Haptics.medium();
     const updatedStatuses = { ...jobStatuses, [jobId]: newStatus };
     setJobStatuses(updatedStatuses);
     jobStatusStorage.updateStatus(jobId, newStatus);
+    try {
+      await jobsAPI.update(jobId, { exec_status: newStatus });
+    } catch (err) {
+      console.error('ScheduleScreen: failed to update job status', err);
+    }
+  };
+
+  const handleJobReschedule = async (jobId: string, newTime: string) => {
+    try {
+      const job = allJobs.find(j => j.id === jobId);
+      if (!job || !job.scheduledDate) return;
+      const date = new Date(job.scheduledDate);
+      const [timePart, period] = newTime.split(' ');
+      const [hoursStr, minutesStr] = timePart.split(':');
+      let hours = parseInt(hoursStr, 10);
+      const minutes = parseInt(minutesStr, 10);
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      date.setHours(hours, minutes, 0, 0);
+      await jobsAPI.update(jobId, { scheduled_at: date.toISOString() } as any);
+      loadJobs();
+    } catch (err) {
+      console.error('ScheduleScreen: failed to reschedule job', err);
+    }
   };
 
   const handleFreeTimeNoteAdd = (timeSlot: string, note: FreeTimeNote) => {
@@ -149,8 +194,8 @@ export default function ScheduleScreen() {
   };
 
   const handleJobPress = (job: any) => {
-    // Navigate to job details or show modal
-    console.log('Job pressed:', job.title);
+    const fullJob = allJobs.find(j => j.id === job.id) || job;
+    setSelectedJob(fullJob);
   };
 
   return (
@@ -221,6 +266,7 @@ export default function ScheduleScreen() {
         ) : (
           <LinearTimeCalendar
             selectedDate={selectedDate}
+            jobs={allJobs}
             onJobPress={handleJobPress}
             isDayStarted={isDayStarted}
             isDayEnded={isDayEnded}
@@ -230,6 +276,7 @@ export default function ScheduleScreen() {
             onJobStatusChange={handleJobStatusChange}
             freeTimeNotes={freeTimeNotes}
             onFreeTimeNoteAdd={handleFreeTimeNoteAdd}
+            onJobReschedule={handleJobReschedule}
           />
         )}
       </View>
@@ -264,6 +311,18 @@ export default function ScheduleScreen() {
         onAddJob={handleAddJob}
         selectedDate={selectedDate}
       />
+
+      {selectedJob && (
+        <JobDetailModal
+          visible={!!selectedJob}
+          onClose={() => setSelectedJob(null)}
+          job={selectedJob}
+          onStatusChange={(id, status) => {
+            handleJobStatusChange(id, status);
+            setSelectedJob(null);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }

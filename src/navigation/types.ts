@@ -10,9 +10,9 @@ export type RootStackParamList = {
 };
 
 export type MainTabParamList = {
+  Contacts: undefined;
   Jobs: undefined;
   Schedule: undefined;
-  Chat: undefined;
   Billing: undefined;
   Profile: undefined;
 };
@@ -21,7 +21,8 @@ export type MainStackParamList = {
   MainTabs: undefined;
   Dashboard: undefined;
   JobsList: undefined;
-  JobDetail: { jobId: string };
+  JobDetail: { jobId: string; pendingAccept?: boolean };
+  JobEdit: { jobId: string };
   Contacts: undefined;
   ContactDetail: { contactId: string };
   Calendar: undefined;
@@ -35,6 +36,7 @@ export type MainStackParamList = {
   Expenses: undefined;
   CreateExpense: undefined;
   ProfileCompletion: undefined;
+  ClientDetail: { contact: { id: string; name: string; phone?: string; email?: string; nif?: string; notes?: string } };
 };
 
 // Combine all param lists for type safety

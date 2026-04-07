@@ -19,6 +19,7 @@ export function mapBackendJob(j: any): Job {
     description: j.description || j.raw_text || '',
     client: j.client_name || '',
     clientNif: j.client_nif || undefined,
+    clientEmail: j.client_email || undefined,
     phoneNumber: j.client_phone || undefined,
     location: j.location || '',
     address: j.address || '',
@@ -44,6 +45,9 @@ export function mapBackendJob(j: any): Job {
     recurringNote: j.recurring_note,
     photoUrl: j.photo_url,
     rawText: j.raw_text,
+    estimatedDurationMinutes: j.estimated_duration_minutes ?? 60,
+    autoScheduled: j.auto_scheduled ?? false,
+    scheduleMessage: j.schedule_message || undefined,
   };
 }
 

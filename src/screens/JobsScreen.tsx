@@ -13,6 +13,7 @@ import {
   Platform,
   Dimensions,
   StatusBar,
+  DeviceEventEmitter,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -28,6 +29,7 @@ import { startOfflineSyncListener } from '../services/offlineQueue';
 import { checkForPostCallPrompt, requestCallLogPermission } from '../services/callLog';
 import { onForegroundMessage } from '../services/notifications';
 import { Modal, Alert, Linking } from 'react-native';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
 type JobsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobsList'>;
 
@@ -84,7 +86,9 @@ export default function JobsScreen() {
   const [selectedDayOffset, setSelectedDayOffset] = useState(0);
   const [isAddJobModalVisible, setIsAddJobModalVisible] = useState(false);
   const [postCallClient, setPostCallClient] = useState<string | null>(null);
+  const [scheduleToast, setScheduleToast] = useState<string | null>(null);
   const lastCallCheckRef = React.useRef(Date.now());
+  const toastTimerRef = React.useRef<any>(null);
 
   // Load jobs + check post-call every time screen is focused
   useFocusEffect(
@@ -108,6 +112,12 @@ export default function JobsScreen() {
     const unsubPush = onForegroundMessage((payload) => {
       if (payload.type === 'job_created' || payload.type === 'job_updated') {
         loadJobs();
+        // Show schedule toast if auto-scheduled
+        if (payload.auto_scheduled === 'true' && payload.schedule_message) {
+          setScheduleToast(payload.schedule_message);
+          if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+          toastTimerRef.current = setTimeout(() => setScheduleToast(null), 5000);
+        }
       }
     });
     return () => {
@@ -318,12 +328,12 @@ export default function JobsScreen() {
 
         <View style={styles.standardContent}>
           <Text style={styles.standardTitle}>{job.title}</Text>
-          <View style={styles.standardRatingRow}>
-            <Icon name="account" size={14} color="#94a3b8" />
-            <Text style={styles.standardClientText}>{job.client}</Text>
-            <Icon name="star" size={14} color="#eab308" style={{ marginLeft: 4 }} />
-            <Text style={styles.standardRatingText}>{job.clientRating.toFixed(1)}</Text>
-          </View>
+          {job.client ? (
+            <View style={styles.standardRatingRow}>
+              <Icon name="account" size={14} color="#94a3b8" />
+              <Text style={styles.standardClientText}>{job.client}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.standardDetails}>
             <View style={styles.standardDetailRow}>
@@ -354,9 +364,35 @@ export default function JobsScreen() {
         </View>
 
         <View style={styles.standardFooter}>
-          <TouchableOpacity style={styles.standardFooterButton}>
-            <Icon name="message-outline" size={18} color="#f1f5f9" />
-            <Text style={styles.standardFooterText}>Chat</Text>
+          <TouchableOpacity style={styles.standardFooterButton} onPress={() => {
+              Alert.alert('Add Photo', 'Choose source', [
+                {
+                  text: 'Camera',
+                  onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+                    if (res.assets?.[0]?.uri) {
+                      try {
+                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
+                        Alert.alert('Photo saved');
+                      } catch { Alert.alert('Upload failed'); }
+                    }
+                  }),
+                },
+                {
+                  text: 'Gallery',
+                  onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+                    if (res.assets?.[0]?.uri) {
+                      try {
+                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
+                        Alert.alert('Photo saved');
+                      } catch { Alert.alert('Upload failed'); }
+                    }
+                  }),
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ]);
+            }}>
+            <Icon name="camera-outline" size={18} color="#f1f5f9" />
+            <Text style={styles.standardFooterText}>Capture</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.standardFooterButton}>
@@ -377,6 +413,33 @@ export default function JobsScreen() {
     const isConfirmed = job.status === 'confirmed';
     const isPending = job.status === 'pending';
     const isUrgent = job.priority === 'urgent';
+    const isEnRoute = job.status === 'en-route';
+    const isOnSite = job.status === 'on-site';
+    const isPaused = job.status === 'paused';
+    const isCompleted = job.status === 'completed' || job.status === 'cancelled';
+
+    const mainButtonLabel = isPending ? 'Accept Job'
+      : isConfirmed ? 'Start Job'
+      : isEnRoute ? 'On Site'
+      : isOnSite ? 'Complete'
+      : isPaused ? 'Resume'
+      : null;
+
+    const mainButtonIcon = isPending ? 'check'
+      : isConfirmed ? 'play'
+      : isEnRoute ? 'map-marker-check'
+      : isOnSite ? 'check-circle'
+      : isPaused ? 'play-circle'
+      : 'check';
+
+    const mainButtonStatus = isPending ? 'confirmed'
+      : isConfirmed ? 'en-route'
+      : isEnRoute ? 'on-site'
+      : isOnSite ? 'completed'
+      : isPaused ? 'en-route'
+      : null;
+
+    const mainButtonColor = isOnSite ? '#10b981' : isPaused ? '#f59e0b' : '#3b82f6';
 
     return (
       <TouchableOpacity
@@ -435,12 +498,18 @@ export default function JobsScreen() {
 
         <View style={styles.standardContent}>
           <Text style={styles.standardTitle}>{job.title}</Text>
-          <View style={styles.standardRatingRow}>
-            <Icon name="account" size={14} color="#94a3b8" />
-            <Text style={styles.standardClientText}>{job.client}</Text>
-            <Icon name="star" size={14} color="#eab308" style={{ marginLeft: 4 }} />
-            <Text style={styles.standardRatingText}>{job.clientRating}</Text>
-          </View>
+          {job.autoScheduled && (
+            <View style={styles.autoScheduledChip}>
+              <Icon name="clock-fast" size={11} color="#a78bfa" />
+              <Text style={styles.autoScheduledText}>Auto-scheduled</Text>
+            </View>
+          )}
+          {job.client ? (
+            <View style={styles.standardRatingRow}>
+              <Icon name="account" size={14} color="#94a3b8" />
+              <Text style={styles.standardClientText}>{job.client}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.standardDetails}>
             <View style={styles.standardDetailRow}>
@@ -459,9 +528,35 @@ export default function JobsScreen() {
         <View style={styles.standardFooter}>
           <TouchableOpacity
             style={styles.standardFooterButton}
-            onPress={() => navigation.navigate('JobDetail', { jobId: job.id })}>
-            <Icon name="message-outline" size={18} color="#f1f5f9" />
-            <Text style={styles.standardFooterText}>Chat</Text>
+            onPress={() => {
+              Alert.alert('Add Photo', 'Choose source', [
+                {
+                  text: 'Camera',
+                  onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+                    if (res.assets?.[0]?.uri) {
+                      try {
+                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
+                        Alert.alert('Photo saved');
+                      } catch { Alert.alert('Upload failed'); }
+                    }
+                  }),
+                },
+                {
+                  text: 'Gallery',
+                  onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+                    if (res.assets?.[0]?.uri) {
+                      try {
+                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
+                        Alert.alert('Photo saved');
+                      } catch { Alert.alert('Upload failed'); }
+                    }
+                  }),
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ]);
+            }}>
+            <Icon name="camera-outline" size={18} color="#f1f5f9" />
+            <Text style={styles.standardFooterText}>Capture</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -474,22 +569,26 @@ export default function JobsScreen() {
             <Text style={styles.standardFooterText}>Navigate</Text>
           </TouchableOpacity>
 
+          {!isCompleted && mainButtonLabel && (
           <TouchableOpacity
-            style={[styles.standardMainButton, { backgroundColor: '#3b82f6' }]}
+            style={[styles.standardMainButton, { backgroundColor: mainButtonColor }]}
             onPress={async () => {
+              if (isPending) {
+                // Navigate to job detail to review + confirm scheduling before accepting
+                navigation.navigate('JobDetail', { jobId: job.id, pendingAccept: true });
+                return;
+              }
               try {
-                const newStatus = isConfirmed ? 'en-route' : 'confirmed';
-                await jobsAPI.update(job.id, { exec_status: newStatus });
+                await jobsAPI.update(job.id, { exec_status: mainButtonStatus });
                 loadJobs();
               } catch (e) {
                 Alert.alert('Error', 'Could not update job status');
               }
             }}>
-            <Icon name={isConfirmed ? "play" : "check"} size={18} color="#fff" />
-            <Text style={styles.standardMainButtonText}>
-              {isConfirmed ? "Start Job" : "Accept Job"}
-            </Text>
+            <Icon name={mainButtonIcon} size={18} color="#fff" />
+            <Text style={styles.standardMainButtonText}>{mainButtonLabel}</Text>
           </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -508,6 +607,18 @@ export default function JobsScreen() {
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
+      {/* ── Auto-schedule toast ── */}
+      {scheduleToast && (
+        <TouchableOpacity
+          style={styles.scheduleToast}
+          onPress={() => setScheduleToast(null)}
+          activeOpacity={0.9}>
+          <Icon name="clock-check-outline" size={18} color="#a78bfa" />
+          <Text style={styles.scheduleToastText}>{scheduleToast}</Text>
+          <Icon name="close" size={14} color="#64748b" />
+        </TouchableOpacity>
+      )}
+
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
           <TregoLogo size="md" />
@@ -520,7 +631,7 @@ export default function JobsScreen() {
               <Text style={styles.notificationBadgeText}>1</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addButton}>
+          <TouchableOpacity style={styles.addButton} onPress={() => setIsAddJobModalVisible(true)}>
             <Icon name="plus" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -580,7 +691,7 @@ export default function JobsScreen() {
           hasEverHadJobs === false ? (
             // 4.4 — First-time empty screen
             <View style={styles.firstTimeCard}>
-              <Icon name="microphone-outline" size={48} color={orbColor} />
+              <Icon name="camera-outline" size={48} color={orbColor} />
               <Text style={styles.firstTimeTitle}>Try it now</Text>
               <Text style={styles.firstTimeBody}>
                 Tap and hold the button below, then say your next job.{'\n'}Speak naturally — Trego handles the rest.
@@ -1295,7 +1406,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#f8fafc',
+    marginBottom: 4,
+  },
+  scheduleToast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1e1b4b',
+    borderWidth: 1,
+    borderColor: '#a78bfa40',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    zIndex: 999,
+  },
+  scheduleToastText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#e2e8f0',
+    lineHeight: 18,
+  },
+  autoScheduledChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: '#2e1f69',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#a78bfa40',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     marginBottom: 8,
+  },
+  autoScheduledText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#a78bfa',
   },
   standardRatingRow: {
     flexDirection: 'row',
