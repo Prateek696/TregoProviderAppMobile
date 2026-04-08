@@ -16,6 +16,7 @@ router.get('/', auth, async (req, res, next) => {
        LEFT JOIN contact_phones cp ON cp.client_id = c.id
        LEFT JOIN contact_emails ce ON ce.client_id = c.id
        WHERE c.provider_id = $1
+         AND (c.sync_status IS NULL OR c.sync_status != 'synced')
        GROUP BY c.id
        ORDER BY c.name ASC`,
       [req.provider.id]
@@ -69,23 +70,34 @@ router.post(
         const { name, phones = [], emails = [], source_contact_id } = contact;
         if (!name) { skipped++; continue; }
 
-        // Upsert by source_contact_id (device contact ID) to avoid duplicates on re-sync
-        const { rows } = await client.query(
-          `INSERT INTO clients (provider_id, name, phone, source_contact_id, sync_status)
-           VALUES ($1, $2, $3, $4, 'synced')
-           ON CONFLICT (provider_id, source_contact_id) DO UPDATE
-             SET name = EXCLUDED.name,
-                 phone = EXCLUDED.phone,
-                 sync_status = 'synced',
-                 updated_at = NOW()
-           RETURNING id`,
-          [
-            req.provider.id,
-            name,
-            phones[0]?.number || null,
-            source_contact_id || null,
-          ]
-        );
+        // Upsert by source_contact_id when available, otherwise plain insert
+        let rows;
+        if (source_contact_id) {
+          // Partial unique index: (provider_id, source_contact_id) WHERE source_contact_id IS NOT NULL
+          ({ rows } = await client.query(
+            `INSERT INTO clients (provider_id, name, phone, source_contact_id, sync_status)
+             VALUES ($1, $2, $3, $4, 'synced')
+             ON CONFLICT (provider_id, source_contact_id)
+             WHERE source_contact_id IS NOT NULL
+             DO UPDATE SET
+               name        = EXCLUDED.name,
+               phone       = EXCLUDED.phone,
+               sync_status = 'synced',
+               updated_at  = NOW()
+             RETURNING id`,
+            [req.provider.id, name, phones[0]?.number || null, source_contact_id]
+          ));
+        } else {
+          // No device ID — skip if same name already exists for this provider
+          ({ rows } = await client.query(
+            `INSERT INTO clients (provider_id, name, phone, sync_status)
+             VALUES ($1, $2, $3, 'synced')
+             ON CONFLICT DO NOTHING
+             RETURNING id`,
+            [req.provider.id, name, phones[0]?.number || null]
+          ));
+          if (!rows.length) { skipped++; continue; }
+        }
 
         const clientId = rows[0].id;
 

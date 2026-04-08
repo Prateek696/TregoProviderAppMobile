@@ -162,10 +162,12 @@ router.get('/earnings', auth, async (req, res, next) => {
 
     // Completed jobs with price breakdown (last 30)
     const { rows: recentJobs } = await pool.query(
-      `SELECT id, title, COALESCE(actual_price, price, 0) AS amount,
-              completed_at, client_name, category
-       FROM jobs WHERE provider_id = $1 AND exec_status = 'completed'
-       ORDER BY completed_at DESC NULLS LAST LIMIT 30`,
+      `SELECT j.id, j.title, COALESCE(j.actual_price, j.price, 0) AS amount,
+              j.completed_at, c.name AS client_name, j.category
+       FROM jobs j
+       LEFT JOIN clients c ON j.client_id = c.id
+       WHERE j.provider_id = $1 AND j.exec_status = 'completed'
+       ORDER BY j.completed_at DESC NULLS LAST LIMIT 30`,
       [providerId]
     );
 
