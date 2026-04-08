@@ -86,8 +86,8 @@ function buildMessage(slotStart, slotEnd, offsetDays, reason) {
  * Load provider working hours into a map { dayOfWeek: [{start, end}] }
  * Falls back to Mon–Fri 09:00–18:00 if none configured.
  */
-async function loadWorkingHours(providerId) {
-  const { rows } = await pool.query(
+async function loadWorkingHours(providerId, db = pool) {
+  const { rows } = await db.query(
     `SELECT day_of_week, is_active, blocks
      FROM provider_working_hours
      WHERE provider_id = $1`,
@@ -117,10 +117,10 @@ async function loadWorkingHours(providerId) {
  * Fetch all booked jobs for a provider on a specific date.
  * Returns sorted array of { start: Date, end: Date }.
  */
-async function loadBookings(providerId, date, excludeJobId) {
+async function loadBookings(providerId, date, excludeJobId, db = pool) {
   const dateStr = date.toISOString().split('T')[0];
 
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `SELECT scheduled_at,
             COALESCE(estimated_duration_minutes, 60) AS dur
      FROM jobs
@@ -199,12 +199,12 @@ function findGaps(blockStart, blockEnd, bookings, bufferMin, earliest) {
  *
  * @returns {Array<{start: Date, end: Date}>}  Up to `maxSlots` fitting slots
  */
-async function scanDay(providerId, day, schedule, jobDurationMin, bufferMin, excludeJobId, maxSlots) {
+async function scanDay(providerId, day, schedule, jobDurationMin, bufferMin, excludeJobId, maxSlots, db = pool) {
   const dow = day.getDay(); // 0=Sun
   const blocks = schedule[dow];
   if (!blocks || blocks.length === 0) return [];
 
-  const bookings = await loadBookings(providerId, day, excludeJobId);
+  const bookings = await loadBookings(providerId, day, excludeJobId, db);
   const now = new Date();
   const slots = [];
 
@@ -253,7 +253,7 @@ async function scanDay(providerId, day, schedule, jobDurationMin, bufferMin, exc
  *
  * @returns {Object} { scheduledAt, scheduledEnd, durationMinutes, message, reason, alternatives }
  */
-async function schedule(opts) {
+async function schedule(opts, db = pool) {
   const {
     providerId,
     jobId = null,
@@ -273,7 +273,7 @@ async function schedule(opts) {
   const bufferMin = BUFFER_BY_PRIORITY[priority] ?? 15;
 
   // ── 3. Load working hours ────────────────────────────────────────────────
-  const schedule_ = await loadWorkingHours(providerId);
+  const schedule_ = await loadWorkingHours(providerId, db);
 
   // ── 4. Normalise requested date ──────────────────────────────────────────
   const now = new Date();
@@ -326,7 +326,7 @@ async function schedule(opts) {
     day.setHours(0, 0, 0, 0);
 
     const slots = await scanDay(
-      providerId, day, schedule_, jobDuration, bufferMin, jobId, SLOT_ALTERNATIVES
+      providerId, day, schedule_, jobDuration, bufferMin, jobId, SLOT_ALTERNATIVES, db
     );
 
     if (slots.length === 0) continue;
@@ -424,35 +424,58 @@ async function schedule(opts) {
 // ── Convenience: schedule + persist to DB ────────────────────────────────────
 
 /**
+ * Convert provider UUID to a stable integer for pg_advisory_lock.
+ * Takes first 8 hex chars of the UUID → 32-bit int.
+ */
+function providerLockKey(providerId) {
+  const hex = providerId.replace(/-/g, '').slice(0, 8);
+  return parseInt(hex, 16) & 0x7fffffff; // positive 31-bit int
+}
+
+/**
  * Schedule a job and write the result to the jobs table.
  * This is the main entry point used by parseJob and all creation paths.
+ *
+ * Uses a PostgreSQL advisory lock per provider so concurrent parseJob calls
+ * are serialized — prevents two jobs from being scheduled in the same slot.
  */
 async function scheduleAndPersist(opts) {
-  const result = await schedule(opts);
+  const client = await pool.connect();
+  try {
+    // Lock: only one scheduling operation per provider at a time.
+    // This prevents two concurrent parseJob calls from both seeing zero bookings
+    // and scheduling into the same 08:00 slot.
+    const lockKey = providerLockKey(opts.providerId);
+    await client.query('SELECT pg_advisory_lock($1)', [lockKey]);
 
-  if (opts.jobId) {
-    // Only persist if the job hasn't been manually confirmed yet (e.g. by AddJobModal).
-    // Jobs manually confirmed via PUT /api/jobs/:id set exec_status='confirmed' before
-    // parseJob finishes, so this WHERE prevents the scheduler from overriding manual times.
-    await pool.query(
-      `UPDATE jobs
-       SET scheduled_at              = $1,
-           estimated_duration_minutes = $2,
-           auto_scheduled            = TRUE,
-           schedule_message          = $3,
-           updated_at                = NOW()
-       WHERE id = $4
-         AND exec_status = 'pending'`,
-      [
-        result.scheduledAt.toISOString(),
-        result.durationMinutes,
-        result.message,
-        opts.jobId,
-      ]
-    );
+    // Pass the locked client through so all queries see a consistent snapshot
+    const result = await schedule(opts, client);
+
+    if (opts.jobId) {
+      // Only persist if the job hasn't been manually confirmed yet (e.g. by AddJobModal).
+      await client.query(
+        `UPDATE jobs
+         SET scheduled_at              = $1,
+             estimated_duration_minutes = $2,
+             auto_scheduled            = TRUE,
+             schedule_message          = $3,
+             updated_at                = NOW()
+         WHERE id = $4
+           AND exec_status = 'pending'`,
+        [
+          result.scheduledAt.toISOString(),
+          result.durationMinutes,
+          result.message,
+          opts.jobId,
+        ]
+      );
+    }
+
+    return result;
+  } finally {
+    // Unlock happens automatically when client is released
+    client.release();
   }
-
-  return result;
 }
 
 module.exports = {
