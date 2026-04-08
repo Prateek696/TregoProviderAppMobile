@@ -217,19 +217,13 @@ router.get('/stats', auth, async (req, res, next) => {
 
     // Average response time (minutes between job created_at and first status change)
     // Approximated as avg time between creation and confirmed
-    const { rows: ratingRows } = await pool.query(
-      `SELECT AVG(rating) AS avg_rating, COUNT(rating) AS rating_count
-       FROM jobs WHERE provider_id = $1 AND rating IS NOT NULL`,
-      [providerId]
-    );
-
     res.json({
       active_jobs: parseInt(counts[0].active),
       completed_jobs: completed,
       total_jobs: parseInt(counts[0].total),
       win_rate: winRate,
-      rating: ratingRows[0].avg_rating ? parseFloat(parseFloat(ratingRows[0].avg_rating).toFixed(1)) : null,
-      rating_count: parseInt(ratingRows[0].rating_count) || 0,
+      rating: null,
+      rating_count: 0,
     });
   } catch (err) {
     next(err);
