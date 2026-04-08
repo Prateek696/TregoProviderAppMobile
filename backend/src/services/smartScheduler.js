@@ -133,11 +133,16 @@ async function loadBookings(providerId, date, excludeJobId, db = pool) {
     [providerId, excludeJobId || null, dateStr]
   );
 
-  return rows.map(r => {
+  const bookings = rows.map(r => {
     const start = new Date(r.scheduled_at);
     const end   = new Date(start.getTime() + r.dur * 60_000);
     return { start, end };
   });
+
+  console.log(`[Scheduler] loadBookings ${dateStr}: found ${bookings.length} existing jobs`,
+    bookings.map(b => `${b.start.toISOString().slice(11,16)}-${b.end.toISOString().slice(11,16)}`));
+
+  return bookings;
 }
 
 // ── Gap finder (core algorithm) ──────────────────────────────────────────────
@@ -441,19 +446,22 @@ function providerLockKey(providerId) {
  */
 async function scheduleAndPersist(opts) {
   const client = await pool.connect();
+  const lockKey = providerLockKey(opts.providerId);
   try {
-    // Lock: only one scheduling operation per provider at a time.
-    // This prevents two concurrent parseJob calls from both seeing zero bookings
-    // and scheduling into the same 08:00 slot.
-    const lockKey = providerLockKey(opts.providerId);
-    await client.query('SELECT pg_advisory_lock($1)', [lockKey]);
+    // Transaction + advisory lock: serialize scheduling per provider.
+    // pg_advisory_xact_lock auto-releases at COMMIT/ROLLBACK (no leak risk).
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey]);
 
-    // Pass the locked client through so all queries see a consistent snapshot
+    console.log(`[Scheduler] Lock acquired for provider ${opts.providerId}, job ${opts.jobId}`);
+
+    // Pass the locked client so all queries run inside this transaction
     const result = await schedule(opts, client);
 
+    console.log(`[Scheduler] Job ${opts.jobId} → ${result.scheduledAt.toISOString()} (${result.reason})`);
+
     if (opts.jobId) {
-      // Only persist if the job hasn't been manually confirmed yet (e.g. by AddJobModal).
-      await client.query(
+      const { rowCount } = await client.query(
         `UPDATE jobs
          SET scheduled_at              = $1,
              estimated_duration_minutes = $2,
@@ -469,11 +477,15 @@ async function scheduleAndPersist(opts) {
           opts.jobId,
         ]
       );
+      console.log(`[Scheduler] UPDATE rowCount=${rowCount} for job ${opts.jobId}`);
     }
 
+    await client.query('COMMIT');
     return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
   } finally {
-    // Unlock happens automatically when client is released
     client.release();
   }
 }
