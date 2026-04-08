@@ -27,7 +27,7 @@ export function mapBackendJob(j: any): Job {
     actualPrice: j.actual_price ? `€${j.actual_price}` : undefined,
     estimatedPrice: j.price ? `€${j.price}` : null,
     scheduledTime: j.scheduled_at
-      ? new Date(j.scheduled_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
+      ? new Date(j.scheduled_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
       : 'TBD',
     scheduledDate: j.scheduled_at || null,
     status: (j.exec_status as Job['status']) || 'pending',
