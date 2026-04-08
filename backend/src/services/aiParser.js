@@ -1,6 +1,7 @@
 const Groq = require('groq-sdk');
 const pool = require('../db');
 const { sendPushNotification } = require('./notifications');
+const { scheduleAndPersist } = require('./smartScheduler');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -48,126 +49,6 @@ Respond ONLY with a valid JSON object (no markdown, no explanation) with these e
   "urgent": boolean — true if urgency words detected, false otherwise,
   "confidence": float 0.0 to 1.0 — how confident you are in the extraction
 }`;
-
-// ── Auto-schedule: find next available slot from provider working hours ──────
-// Default durations per job category (minutes)
-const CATEGORY_DURATIONS = {
-  plumbing:    90,
-  electrical:  120,
-  carpentry:   180,
-  painting:    240,
-  cleaning:    120,
-  hvac:        150,
-  landscaping: 180,
-  general:     60,
-  other:       60,
-};
-const BUFFER_MINUTES = 15; // gap between jobs
-
-function formatSlotMessage(slotStart, offsetDays) {
-  const timeStr = slotStart.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-  const [h, m] = timeStr.split(':').map(Number);
-  const suffix = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 || 12;
-  const formatted = `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
-
-  if (offsetDays === 0) return `Scheduled for Today at ${formatted}`;
-  if (offsetDays === 1) return `No availability today. Scheduled for Tomorrow at ${formatted}`;
-  const dateLabel = slotStart.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
-  return `Scheduled for ${dateLabel} at ${formatted}`;
-}
-
-async function autoSchedule(providerId, jobId, category) {
-  // Load provider working hours (0=Sun … 6=Sat)
-  const { rows: wh } = await pool.query(
-    `SELECT day_of_week, is_active, blocks FROM provider_working_hours WHERE provider_id = $1`,
-    [providerId]
-  );
-
-  // Build schedule map; default Mon-Fri 09:00-18:00 if none configured
-  const scheduleMap = {};
-  for (const row of wh) {
-    if (row.is_active && Array.isArray(row.blocks) && row.blocks.length > 0) {
-      scheduleMap[row.day_of_week] = row.blocks;
-    }
-  }
-  if (Object.keys(scheduleMap).length === 0) {
-    for (let d = 1; d <= 5; d++) scheduleMap[d] = [{ start: '09:00', end: '18:00' }];
-  }
-
-  const jobDuration = CATEGORY_DURATIONS[category?.toLowerCase()] || 60;
-  const now = new Date();
-
-  for (let offset = 0; offset <= 30; offset++) {
-    const day = new Date(now);
-    day.setDate(now.getDate() + offset);
-    day.setHours(0, 0, 0, 0);
-
-    const dow = day.getDay();
-    const blocks = scheduleMap[dow];
-    if (!blocks || blocks.length === 0) continue;
-
-    // Check each time block in the day (providers can have split schedules)
-    for (const block of blocks) {
-      const [sh, sm] = block.start.split(':').map(Number);
-      const [eh, em] = block.end.split(':').map(Number);
-
-      const blockStart = new Date(day);
-      blockStart.setHours(sh, sm, 0, 0);
-      const blockEnd = new Date(day);
-      blockEnd.setHours(eh, em, 0, 0);
-
-      // Slot must start at or after now (for today)
-      let slotStart = new Date(blockStart);
-      if (offset === 0 && now > slotStart) {
-        slotStart = new Date(now);
-        // Round up to next 15-minute mark
-        slotStart.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
-      }
-
-      if (slotStart >= blockEnd) continue; // past this block
-
-      // Fetch existing jobs for this day sorted by start time
-      const dateStr = day.toISOString().split('T')[0];
-      const { rows: existing } = await pool.query(
-        `SELECT scheduled_at,
-                COALESCE(estimated_duration_minutes, 60) AS dur
-         FROM jobs
-         WHERE provider_id = $1
-           AND id != $2
-           AND exec_status IN ('confirmed', 'en-route', 'on-site', 'paused')
-           AND scheduled_at::date = $3
-         ORDER BY scheduled_at`,
-        [providerId, jobId, dateStr]
-      );
-
-      // Push slotStart past each conflicting job + buffer
-      for (const e of existing) {
-        const eStart = new Date(e.scheduled_at);
-        const eEnd   = new Date(eStart.getTime() + (e.dur + BUFFER_MINUTES) * 60000);
-        if (slotStart >= eStart && slotStart < eEnd) {
-          slotStart = new Date(eEnd);
-        } else if (slotStart < eStart) {
-          break; // gap before this job — check if it fits
-        }
-      }
-
-      // Check job fits within this block
-      const slotEnd = new Date(slotStart.getTime() + jobDuration * 60000);
-      if (slotEnd <= blockEnd) {
-        const message = formatSlotMessage(slotStart, offset);
-        return { scheduledAt: slotStart, message, durationMinutes: jobDuration };
-      }
-    }
-  }
-
-  // Fallback: tomorrow 09:00
-  const fallback = new Date(now);
-  fallback.setDate(now.getDate() + 1);
-  fallback.setHours(9, 0, 0, 0);
-  const message = formatSlotMessage(fallback, 1);
-  return { scheduledAt: fallback, message, durationMinutes: jobDuration };
-}
 
 // Fields that count as "recognisable job content"
 function hasJobContent(parsed) {
@@ -338,25 +219,40 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
     ]
   );
 
-  // ── Auto-schedule if AI returned no datetime ─────────────────────────────────
+  // ── Smart-schedule EVERY job into an available slot ──────────────────────────
+  // If AI returned a datetime → use it as preferredDate/Time (validated against gaps)
+  // If no datetime → auto-find the earliest available slot
   let scheduleMessage = null;
-  if (!datetime) {
-    try {
-      const { scheduledAt, message, durationMinutes } = await autoSchedule(providerId, jobId, category);
-      scheduleMessage = message;
-      await pool.query(
-        `UPDATE jobs
-         SET scheduled_at               = $1,
-             estimated_duration_minutes = $2,
-             auto_scheduled             = TRUE,
-             schedule_message           = $3,
-             updated_at                 = NOW()
-         WHERE id = $4`,
-        [scheduledAt.toISOString(), durationMinutes, message, jobId]
-      );
-    } catch (autoErr) {
-      console.error('Auto-schedule error:', autoErr.message);
+  try {
+    let preferredDate = null;
+    let preferredTime = null;
+
+    if (datetime) {
+      const dt = new Date(datetime);
+      if (!isNaN(dt.getTime())) {
+        preferredDate = dt;
+        // Only set preferredTime if the AI returned an actual time (not just a date).
+        // Date-only strings like "2026-04-09" parse to midnight UTC — that means
+        // "on this date, any time", NOT "at midnight".
+        const hasExplicitTime = datetime.includes('T') && !datetime.endsWith('T00:00:00')
+          && !datetime.endsWith('T00:00');
+        if (hasExplicitTime) {
+          preferredTime = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+        }
+      }
     }
+
+    const schedResult = await scheduleAndPersist({
+      providerId,
+      jobId,
+      category,
+      priority,
+      preferredDate,
+      preferredTime,
+    });
+    scheduleMessage = schedResult.message;
+  } catch (autoErr) {
+    console.error('Smart-schedule error:', autoErr.message);
   }
 
   // ── Client fuzzy-match / create ──────────────────────────────────────────────
@@ -411,7 +307,7 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
       job_id: jobId,
       duplicate_flag: String(duplicateFlag),
       duplicate_job_id: duplicateJobId || '',
-      auto_scheduled: String(!datetime && !!scheduleMessage),
+      auto_scheduled: String(!!scheduleMessage),
       schedule_message: scheduleMessage || '',
     },
   });

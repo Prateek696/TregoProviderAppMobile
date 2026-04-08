@@ -8,6 +8,7 @@ const auth = require('../middleware/auth');
 const { parseJob } = require('../services/aiParser');
 const { transcribeAudio } = require('../services/whisper');
 const { uploadPhoto } = require('../services/cloudinary');
+const { schedule, scheduleAndPersist } = require('../services/smartScheduler');
 
 const upload = multer({
   dest: '/tmp/trego-audio/',
@@ -446,6 +447,61 @@ router.post('/sync', auth, upload.array('audio', 20), async (req, res) => {
   }
 
   res.json({ synced, total: req.files.length, results });
+});
+
+// POST /api/jobs/:id/reschedule — re-run smart scheduler for an existing job
+router.post('/:id/reschedule', auth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, category, priority, scheduled_at FROM jobs WHERE id = $1 AND provider_id = $2`,
+      [req.params.id, req.provider.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Job not found' });
+
+    const job = rows[0];
+    const result = await scheduleAndPersist({
+      providerId: req.provider.id,
+      jobId: job.id,
+      category: job.category,
+      priority: req.body.priority || job.priority || 'normal',
+      preferredDate: req.body.preferred_date || null,
+      preferredTime: req.body.preferred_time || null,
+    });
+
+    res.json({ schedule: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/jobs/schedule — preview scheduling without creating a job
+router.post('/schedule', auth, async (req, res, next) => {
+  try {
+    const result = await schedule({
+      providerId: req.provider.id,
+      category: req.body.category || 'general',
+      priority: req.body.priority || 'normal',
+      durationMin: req.body.duration_minutes || null,
+      preferredDate: req.body.preferred_date || null,
+      preferredTime: req.body.preferred_time || null,
+    });
+
+    res.json({
+      scheduled_date: result.scheduledAt.toISOString().split('T')[0],
+      scheduled_start: result.scheduledAt.toISOString(),
+      scheduled_end: result.scheduledEnd.toISOString(),
+      duration_minutes: result.durationMinutes,
+      message: result.message,
+      reason: result.reason,
+      alternatives: result.alternatives.map(a => ({
+        start: a.scheduledAt.toISOString(),
+        end: a.scheduledEnd.toISOString(),
+        message: a.message,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/jobs/:id/photos — list all photos for a job
