@@ -1,6 +1,10 @@
 /**
  * Smart Scheduler — gap-finding, constraint-based job scheduling.
  *
+ * IMPORTANT: All date/time math uses UTC methods (setUTCHours, getUTCDay, etc.)
+ * so the scheduler is independent of server timezone. Working hours like "08:00"
+ * are treated as 08:00 UTC.
+ *
  * Algorithm:
  *   1. Normalise requested date (today / tomorrow / ISO string)
  *   2. Validate working day — skip to next if non-working
@@ -9,12 +13,6 @@
  *   5. Pick the first gap where the job fits
  *   6. If nothing fits, advance to next working day (up to 30 days)
  *   7. Return scheduled slot + human-readable reason
- *
- * Priority handling:
- *   - urgent  → search starts at earliest possible moment, can use the
- *               tightest gaps (buffer reduced to 5 min)
- *   - normal  → standard 15-min buffer
- *   - low     → scheduled after all normal/urgent jobs on that day
  */
 
 const pool = require('../db');
@@ -40,29 +38,31 @@ const BUFFER_BY_PRIORITY = {
 };
 
 const MAX_SEARCH_DAYS  = 30;
-const SLOT_ALTERNATIVES = 3; // return up to N alternative slots
+const SLOT_ALTERNATIVES = 3;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── UTC Helpers ─────────────────────────────────────────────────────────────
 
-/** Round a Date up to the next 15-minute mark */
+/** Get midnight UTC for a given Date */
+function utcMidnight(d) {
+  const r = new Date(d);
+  r.setUTCHours(0, 0, 0, 0);
+  return r;
+}
+
+/** Round a Date up to the next 15-minute mark (UTC) */
 function roundUp15(date) {
   const d = new Date(date);
-  d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
+  d.setUTCMinutes(Math.ceil(d.getUTCMinutes() / 15) * 15, 0, 0);
   return d;
 }
 
-/** Format time as "9:00 AM" */
+/** Format UTC time as "9:00 AM" */
 function fmtTime(date) {
-  const h = date.getHours();
-  const m = date.getMinutes();
+  const h = date.getUTCHours();
+  const m = date.getUTCMinutes();
   const suffix = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
   return `${h12}:${String(m).padStart(2, '0')} ${suffix}`;
-}
-
-/** Format time as "09:00" (24h) */
-function fmtTime24(date) {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 /** Human-readable scheduling reason */
@@ -73,7 +73,12 @@ function buildMessage(slotStart, slotEnd, offsetDays, reason) {
   let dateLabel;
   if (offsetDays === 0) dateLabel = 'Today';
   else if (offsetDays === 1) dateLabel = 'Tomorrow';
-  else dateLabel = slotStart.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+  else {
+    // Manual UTC-safe date formatting
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    dateLabel = `${days[slotStart.getUTCDay()]} ${slotStart.getUTCDate()} ${months[slotStart.getUTCMonth()]}`;
+  }
 
   let msg = `Scheduled for ${dateLabel} at ${time}–${endTime}`;
   if (reason) msg += ` (${reason})`;
@@ -82,10 +87,6 @@ function buildMessage(slotStart, slotEnd, offsetDays, reason) {
 
 // ── Working hours loader ─────────────────────────────────────────────────────
 
-/**
- * Load provider working hours into a map { dayOfWeek: [{start, end}] }
- * Falls back to Mon–Fri 09:00–18:00 if none configured.
- */
 async function loadWorkingHours(providerId, db = pool) {
   const { rows } = await db.query(
     `SELECT day_of_week, is_active, blocks
@@ -113,10 +114,6 @@ async function loadWorkingHours(providerId, db = pool) {
 
 // ── Existing bookings loader ─────────────────────────────────────────────────
 
-/**
- * Fetch all booked jobs for a provider on a specific date.
- * Returns sorted array of { start: Date, end: Date }.
- */
 async function loadBookings(providerId, date, excludeJobId, db = pool) {
   const dateStr = date.toISOString().split('T')[0];
 
@@ -147,28 +144,14 @@ async function loadBookings(providerId, date, excludeJobId, db = pool) {
 
 // ── Gap finder (core algorithm) ──────────────────────────────────────────────
 
-/**
- * Find all empty gaps within a working-hour block, given existing bookings.
- *
- * @param {Date}   blockStart  - Start of the working block
- * @param {Date}   blockEnd    - End of the working block
- * @param {Array}  bookings    - Sorted array of { start, end } bookings for the day
- * @param {number} bufferMin   - Buffer minutes between jobs
- * @param {Date}   earliest    - Don't return gaps before this time (for "today" constraint)
- * @returns {Array<{start: Date, end: Date, durationMin: number}>}
- */
 function findGaps(blockStart, blockEnd, bookings, bufferMin, earliest) {
   const gaps = [];
-
-  // Filter bookings that overlap this block
   const relevant = bookings.filter(b => b.end > blockStart && b.start < blockEnd);
 
   let cursor = new Date(Math.max(blockStart.getTime(), earliest.getTime()));
-  // Round up to 15-min boundary
   cursor = roundUp15(cursor);
 
   for (const booking of relevant) {
-    // Add buffer before this booking
     const bookingStartWithBuffer = new Date(booking.start.getTime() - bufferMin * 60_000);
 
     if (cursor < bookingStartWithBuffer) {
@@ -179,14 +162,12 @@ function findGaps(blockStart, blockEnd, bookings, bufferMin, earliest) {
       }
     }
 
-    // Move cursor past booking + buffer
     const afterBooking = new Date(booking.end.getTime() + bufferMin * 60_000);
     if (afterBooking > cursor) {
       cursor = roundUp15(afterBooking);
     }
   }
 
-  // Gap after last booking until block end
   if (cursor < blockEnd) {
     const durationMin = (blockEnd - cursor) / 60_000;
     if (durationMin > 0) {
@@ -199,13 +180,8 @@ function findGaps(blockStart, blockEnd, bookings, bufferMin, earliest) {
 
 // ── Day scanner ──────────────────────────────────────────────────────────────
 
-/**
- * Scan a single day for available slots that fit the requested duration.
- *
- * @returns {Array<{start: Date, end: Date}>}  Up to `maxSlots` fitting slots
- */
 async function scanDay(providerId, day, schedule, jobDurationMin, bufferMin, excludeJobId, maxSlots, db = pool) {
-  const dow = day.getDay(); // 0=Sun
+  const dow = day.getUTCDay(); // 0=Sun — UTC day of week
   const blocks = schedule[dow];
   if (!blocks || blocks.length === 0) return [];
 
@@ -218,12 +194,14 @@ async function scanDay(providerId, day, schedule, jobDurationMin, bufferMin, exc
     const [eh, em] = block.end.split(':').map(Number);
 
     const blockStart = new Date(day);
-    blockStart.setHours(sh, sm, 0, 0);
+    blockStart.setUTCHours(sh, sm, 0, 0);
     const blockEnd = new Date(day);
-    blockEnd.setHours(eh, em, 0, 0);
+    blockEnd.setUTCHours(eh, em, 0, 0);
 
     // For today, earliest = now; for future days, earliest = blockStart
-    const isToday = day.toDateString() === now.toDateString();
+    const todayStr = now.toISOString().split('T')[0];
+    const dayStr   = day.toISOString().split('T')[0];
+    const isToday  = dayStr === todayStr;
     const earliest = isToday ? now : blockStart;
 
     const gaps = findGaps(blockStart, blockEnd, bookings, bufferMin, earliest);
@@ -244,20 +222,6 @@ async function scanDay(providerId, day, schedule, jobDurationMin, bufferMin, exc
 
 // ── Main scheduler ───────────────────────────────────────────────────────────
 
-/**
- * Schedule a job into the next available slot.
- *
- * @param {Object} opts
- * @param {string} opts.providerId    - Provider UUID
- * @param {string} [opts.jobId]       - Job UUID (excluded from conflict check)
- * @param {string} [opts.category]    - Job category for duration lookup
- * @param {number} [opts.durationMin] - Override duration in minutes
- * @param {string} [opts.priority]    - 'urgent' | 'normal' | 'low'
- * @param {string|Date} [opts.preferredDate] - Requested date (ISO string, Date, 'tomorrow', or null for today)
- * @param {string} [opts.preferredTime]      - Requested time "HH:MM" (best-effort)
- *
- * @returns {Object} { scheduledAt, scheduledEnd, durationMinutes, message, reason, alternatives }
- */
 async function schedule(opts, db = pool) {
   const {
     providerId,
@@ -269,66 +233,59 @@ async function schedule(opts, db = pool) {
     preferredTime = null,
   } = opts;
 
-  // ── 1. Resolve duration ──────────────────────────────────────────────────
   const jobDuration = durationOverride
     || CATEGORY_DURATIONS[category?.toLowerCase()]
     || 60;
 
-  // ── 2. Resolve buffer by priority ────────────────────────────────────────
   const bufferMin = BUFFER_BY_PRIORITY[priority] ?? 15;
 
-  // ── 3. Load working hours ────────────────────────────────────────────────
   const schedule_ = await loadWorkingHours(providerId, db);
 
-  // ── 4. Normalise requested date ──────────────────────────────────────────
+  // ── Normalise requested date (all UTC) ──────────────────────────────────
   const now = new Date();
-  let startDate = new Date(now);
-  startDate.setHours(0, 0, 0, 0);
+  let startDate = utcMidnight(now);
 
   if (preferredDate) {
     if (typeof preferredDate === 'string') {
       const lower = preferredDate.toLowerCase().trim();
       if (lower === 'tomorrow' || lower === 'amanhã') {
-        startDate = new Date(now);
-        startDate.setDate(startDate.getDate() + 1);
-        startDate.setHours(0, 0, 0, 0);
+        startDate = utcMidnight(now);
+        startDate.setUTCDate(startDate.getUTCDate() + 1);
       } else if (lower === 'today' || lower === 'hoje') {
         // already set
       } else {
-        // Try ISO parse
         const parsed = new Date(preferredDate);
         if (!isNaN(parsed.getTime())) {
-          startDate = new Date(parsed);
-          startDate.setHours(0, 0, 0, 0);
+          startDate = utcMidnight(parsed);
         }
       }
     } else if (preferredDate instanceof Date) {
-      startDate = new Date(preferredDate);
-      startDate.setHours(0, 0, 0, 0);
+      startDate = utcMidnight(preferredDate);
     }
   }
 
   // Don't schedule in the past
-  const todayMidnight = new Date(now);
-  todayMidnight.setHours(0, 0, 0, 0);
+  const todayMidnight = utcMidnight(now);
   if (startDate < todayMidnight) {
     startDate = new Date(todayMidnight);
   }
 
-  // ── 5. Search days for available slot ────────────────────────────────────
+  console.log(`[Scheduler] startDate=${startDate.toISOString()}, preferredTime=${preferredTime}, duration=${jobDuration}min`);
+
+  // ── Search days for available slot ──────────────────────────────────────
   let bestSlot = null;
   let bestDay  = null;
   let bestOffset = 0;
   let reason = '';
   const alternatives = [];
 
-  const requestedDow = startDate.getDay();
+  const requestedDow = startDate.getUTCDay();
   const requestedIsWorkingDay = !!schedule_[requestedDow];
 
   for (let offset = 0; offset <= MAX_SEARCH_DAYS; offset++) {
     const day = new Date(startDate);
-    day.setDate(startDate.getDate() + offset);
-    day.setHours(0, 0, 0, 0);
+    day.setUTCDate(startDate.getUTCDate() + offset);
+    day.setUTCHours(0, 0, 0, 0);
 
     const slots = await scanDay(
       providerId, day, schedule_, jobDuration, bufferMin, jobId, SLOT_ALTERNATIVES, db
@@ -340,7 +297,7 @@ async function schedule(opts, db = pool) {
     if (preferredTime && offset === 0) {
       const [ph, pm] = preferredTime.split(':').map(Number);
       const preferred = new Date(day);
-      preferred.setHours(ph, pm, 0, 0);
+      preferred.setUTCHours(ph, pm, 0, 0);
 
       const match = slots.find(s => s.start.getTime() === preferred.getTime());
       if (match) {
@@ -351,7 +308,6 @@ async function schedule(opts, db = pool) {
         break;
       }
 
-      // Find the closest slot to preferred time
       const closest = slots.reduce((a, b) =>
         Math.abs(a.start - preferred) <= Math.abs(b.start - preferred) ? a : b
       );
@@ -359,7 +315,6 @@ async function schedule(opts, db = pool) {
       bestDay = day;
       bestOffset = offset;
       reason = `nearest slot to requested ${preferredTime}`;
-      // Collect alternatives
       for (const s of slots) {
         if (s !== closest) alternatives.push(s);
       }
@@ -371,22 +326,20 @@ async function schedule(opts, db = pool) {
     bestDay = day;
     bestOffset = offset;
 
-    // Collect alternatives
     for (let i = 1; i < slots.length; i++) alternatives.push(slots[i]);
 
     break;
   }
 
-  // ── 6. Build result ──────────────────────────────────────────────────────
+  // ── Build result ────────────────────────────────────────────────────────
 
   if (!bestSlot) {
-    // No slot in 30 days — fallback to next working day 09:00
-    const fallback = new Date(now);
+    const fallback = utcMidnight(now);
     for (let d = 1; d <= 7; d++) {
-      fallback.setDate(now.getDate() + d);
-      if (schedule_[fallback.getDay()]) break;
+      fallback.setUTCDate(now.getUTCDate() + d);
+      if (schedule_[fallback.getUTCDay()]) break;
     }
-    fallback.setHours(9, 0, 0, 0);
+    fallback.setUTCHours(9, 0, 0, 0);
     const fallbackEnd = new Date(fallback.getTime() + jobDuration * 60_000);
 
     return {
@@ -399,7 +352,6 @@ async function schedule(opts, db = pool) {
     };
   }
 
-  // Build reason string
   if (!reason) {
     if (bestOffset === 0) {
       reason = 'earliest available slot';
@@ -428,34 +380,20 @@ async function schedule(opts, db = pool) {
 
 // ── Convenience: schedule + persist to DB ────────────────────────────────────
 
-/**
- * Convert provider UUID to a stable integer for pg_advisory_lock.
- * Takes first 8 hex chars of the UUID → 32-bit int.
- */
 function providerLockKey(providerId) {
   const hex = providerId.replace(/-/g, '').slice(0, 8);
-  return parseInt(hex, 16) & 0x7fffffff; // positive 31-bit int
+  return parseInt(hex, 16) & 0x7fffffff;
 }
 
-/**
- * Schedule a job and write the result to the jobs table.
- * This is the main entry point used by parseJob and all creation paths.
- *
- * Uses a PostgreSQL advisory lock per provider so concurrent parseJob calls
- * are serialized — prevents two jobs from being scheduled in the same slot.
- */
 async function scheduleAndPersist(opts) {
   const client = await pool.connect();
   const lockKey = providerLockKey(opts.providerId);
   try {
-    // Transaction + advisory lock: serialize scheduling per provider.
-    // pg_advisory_xact_lock auto-releases at COMMIT/ROLLBACK (no leak risk).
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey]);
 
     console.log(`[Scheduler] Lock acquired for provider ${opts.providerId}, job ${opts.jobId}`);
 
-    // Pass the locked client so all queries run inside this transaction
     const result = await schedule(opts, client);
 
     console.log(`[Scheduler] Job ${opts.jobId} → ${result.scheduledAt.toISOString()} (${result.reason})`);
