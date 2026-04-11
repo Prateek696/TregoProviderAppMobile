@@ -78,6 +78,11 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
 
   let parsed;
   try {
+    // 30-second timeout to prevent hanging on Groq API issues
+    const timeoutMs = 30_000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     const completion = await groq.chat.completions.create({
       model: MODEL,
       messages: [
@@ -87,6 +92,7 @@ async function parseJob(jobId, rawText, providerId, fcmToken) {
       temperature: 0.1,
       max_tokens: 300,
     });
+    clearTimeout(timer);
 
     const content = completion.choices[0]?.message?.content || '{}';
     parsed = JSON.parse(content);

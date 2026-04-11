@@ -98,13 +98,13 @@ router.get('/', auth, async (req, res, next) => {
 router.get('/digest', auth, async (req, res, next) => {
   try {
     const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    todayStart.setUTCHours(0, 0, 0, 0);
 
     const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
 
     const tomorrowEnd = new Date(tomorrowStart);
-    tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+    tomorrowEnd.setUTCDate(tomorrowEnd.getUTCDate() + 1);
 
     const { rows: todayJobs } = await pool.query(
       `SELECT COUNT(*) AS count FROM jobs
@@ -119,8 +119,8 @@ router.get('/digest', auth, async (req, res, next) => {
     );
 
     res.json({
-      today_count: parseInt(todayJobs[0].count),
-      tomorrow_count: parseInt(tomorrowJobs[0].count),
+      today_count: parseInt(todayJobs[0]?.count || '0'),
+      tomorrow_count: parseInt(tomorrowJobs[0]?.count || '0'),
     });
   } catch (err) {
     next(err);
@@ -281,15 +281,16 @@ router.put(
       payment_received, cash_amount, client_id, estimated_duration_minutes,
     } = req.body;
 
-    // Build lifecycle timestamps based on exec_status transition
-    const extraUpdates = {};
-    if (exec_status === 'en-route') extraUpdates.started_at = 'NOW()';
-    if (exec_status === 'on-site') extraUpdates.on_site_at = 'NOW()';
-    if (exec_status === 'paused') extraUpdates.paused_at = 'NOW()';
-    if (exec_status === 'completed') extraUpdates.completed_at = 'NOW()';
-    if (exec_status === 'cancelled') extraUpdates.cancelled_at = 'NOW()';
-
     try {
+      // Capture old exec_status BEFORE update (for status log)
+      const { rows: oldRows } = await pool.query(
+        `SELECT exec_status FROM jobs WHERE id = $1 AND provider_id = $2`,
+        [req.params.id, req.provider.id]
+      );
+      if (!oldRows.length) return res.status(404).json({ error: 'Job not found' });
+      const oldExecStatus = oldRows[0].exec_status;
+
+      // Single atomic UPDATE with lifecycle timestamps inline (no SQL injection)
       const { rows } = await pool.query(
         `UPDATE jobs
          SET title             = COALESCE($1,  title),
@@ -310,6 +311,11 @@ router.put(
              cash_amount       = COALESCE($16, cash_amount),
              client_id                  = COALESCE($17, client_id),
              estimated_duration_minutes = COALESCE($18, estimated_duration_minutes),
+             started_at     = CASE WHEN $14 = 'en-route'   THEN NOW() ELSE started_at END,
+             on_site_at     = CASE WHEN $14 = 'on-site'    THEN NOW() ELSE on_site_at END,
+             paused_at      = CASE WHEN $14 = 'paused'     THEN NOW() ELSE paused_at END,
+             completed_at   = CASE WHEN $14 = 'completed'  THEN NOW() ELSE completed_at END,
+             cancelled_at   = CASE WHEN $14 = 'cancelled'  THEN NOW() ELSE cancelled_at END,
              updated_at                 = NOW()
          WHERE id = $19 AND provider_id = $20
          RETURNING *`,
@@ -325,25 +331,12 @@ router.put(
       );
       if (!rows.length) return res.status(404).json({ error: 'Job not found' });
 
-      // Apply timestamp updates if any
-      if (Object.keys(extraUpdates).length) {
-        const setClauses = Object.keys(extraUpdates).map((k) => `${k} = ${extraUpdates[k]}`).join(', ');
+      // Log status transition (old status captured before update — no race condition)
+      if (exec_status && oldExecStatus !== exec_status) {
         await pool.query(
-          `UPDATE jobs SET ${setClauses} WHERE id = $1`,
-          [req.params.id]
+          `INSERT INTO job_status_log (job_id, old_status, new_status) VALUES ($1, $2, $3)`,
+          [req.params.id, oldExecStatus, exec_status]
         );
-      }
-
-      // Log status transition if exec_status changed
-      if (exec_status) {
-        const prev = await pool.query(`SELECT exec_status FROM jobs WHERE id = $1`, [req.params.id]);
-        const oldStatus = prev.rows[0]?.exec_status;
-        if (oldStatus !== exec_status) {
-          await pool.query(
-            `INSERT INTO job_status_log (job_id, old_status, new_status) VALUES ($1, $2, $3)`,
-            [req.params.id, oldStatus, exec_status]
-          );
-        }
       }
 
       res.json({ job: rows[0] });
@@ -538,11 +531,13 @@ router.post('/:id/photo', auth, photoUpload.single('photo'), async (req, res, ne
 
     const phase = req.body.phase || 'during';   // before | during | after
     const source = req.body.source || 'provider'; // client | provider
+    const latitude = req.body.latitude ? parseFloat(req.body.latitude) : null;
+    const longitude = req.body.longitude ? parseFloat(req.body.longitude) : null;
 
     const { rows } = await pool.query(
-      `INSERT INTO job_photos (job_id, photo_url, phase, source, captured_at)
-       VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
-      [req.params.id, photoUrl, phase, source]
+      `INSERT INTO job_photos (job_id, photo_url, phase, source, latitude, longitude, captured_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
+      [req.params.id, photoUrl, phase, source, latitude, longitude]
     );
 
     res.json({ photo: rows[0] });
