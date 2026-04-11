@@ -10,8 +10,8 @@ router.get('/', auth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT c.*,
-              COALESCE(json_agg(DISTINCT cp.*) FILTER (WHERE cp.id IS NOT NULL), '[]') AS phones,
-              COALESCE(json_agg(DISTINCT ce.*) FILTER (WHERE ce.id IS NOT NULL), '[]') AS emails
+              COALESCE(json_agg(DISTINCT cp.*) FILTER (WHERE cp.id IS NOT NULL), '[]'::json) AS phones,
+              COALESCE(json_agg(DISTINCT ce.*) FILTER (WHERE ce.id IS NOT NULL), '[]'::json) AS emails
        FROM clients c
        LEFT JOIN contact_phones cp ON cp.client_id = c.id
        LEFT JOIN contact_emails ce ON ce.client_id = c.id
@@ -32,8 +32,8 @@ router.get('/:id', auth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       `SELECT c.*,
-              COALESCE(json_agg(DISTINCT cp.*) FILTER (WHERE cp.id IS NOT NULL), '[]') AS phones,
-              COALESCE(json_agg(DISTINCT ce.*) FILTER (WHERE ce.id IS NOT NULL), '[]') AS emails
+              COALESCE(json_agg(DISTINCT cp.*) FILTER (WHERE cp.id IS NOT NULL), '[]'::json) AS phones,
+              COALESCE(json_agg(DISTINCT ce.*) FILTER (WHERE ce.id IS NOT NULL), '[]'::json) AS emails
        FROM clients c
        LEFT JOIN contact_phones cp ON cp.client_id = c.id
        LEFT JOIN contact_emails ce ON ce.client_id = c.id
@@ -77,9 +77,7 @@ router.post(
           ({ rows } = await client.query(
             `INSERT INTO clients (provider_id, name, phone, source_contact_id, sync_status)
              VALUES ($1, $2, $3, $4, 'synced')
-             ON CONFLICT (provider_id, source_contact_id)
-             WHERE source_contact_id IS NOT NULL
-             DO UPDATE SET
+             ON CONFLICT (provider_id, source_contact_id) DO UPDATE SET
                name        = EXCLUDED.name,
                phone       = EXCLUDED.phone,
                sync_status = 'synced',

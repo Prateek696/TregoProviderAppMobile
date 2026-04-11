@@ -394,7 +394,7 @@ router.post('/voice', auth, upload.single('audio'), async (req, res, next) => {
 });
 
 // POST /api/jobs/sync — offline sync: multiple audio files
-router.post('/sync', auth, upload.array('audio', 20), async (req, res) => {
+router.post('/sync', auth, upload.array('audio', 20), async (req, res, next) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'At least one audio file is required' });
   }
