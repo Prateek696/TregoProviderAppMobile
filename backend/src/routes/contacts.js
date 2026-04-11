@@ -67,23 +67,23 @@ router.post(
       await client.query('BEGIN');
 
       for (const contact of contacts) {
-        const { name, phones = [], emails = [], source_contact_id } = contact;
+        const { name, phones = [], emails = [], source_contact_id, client_type } = contact;
         if (!name) { skipped++; continue; }
 
         // Upsert by source_contact_id when available, otherwise plain insert
         let rows;
         if (source_contact_id) {
-          // Partial unique index: (provider_id, source_contact_id) WHERE source_contact_id IS NOT NULL
           ({ rows } = await client.query(
-            `INSERT INTO clients (provider_id, name, phone, source_contact_id, sync_status)
-             VALUES ($1, $2, $3, $4, 'synced')
+            `INSERT INTO clients (provider_id, name, phone, source_contact_id, sync_status, client_type)
+             VALUES ($1, $2, $3, $4, 'trego-only', $5)
              ON CONFLICT (provider_id, source_contact_id) DO UPDATE SET
                name        = EXCLUDED.name,
                phone       = EXCLUDED.phone,
-               sync_status = 'synced',
+               client_type = EXCLUDED.client_type,
+               sync_status = 'trego-only',
                updated_at  = NOW()
              RETURNING id`,
-            [req.provider.id, name, phones[0]?.number || null, source_contact_id]
+            [req.provider.id, name, phones[0]?.number || null, source_contact_id, client_type || 'individual']
           ));
         } else {
           // No device ID — skip if same name already exists for this provider
