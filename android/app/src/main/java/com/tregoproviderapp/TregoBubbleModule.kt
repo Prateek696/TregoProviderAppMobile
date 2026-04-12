@@ -31,11 +31,15 @@ class TregoBubbleModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun showBubble() {
         if (!Settings.canDrawOverlays(reactContext)) return
-        val intent = Intent(reactContext, TregoBubbleService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            reactContext.startForegroundService(intent)
-        } else {
-            reactContext.startService(intent)
+        try {
+            val intent = Intent(reactContext, TregoBubbleService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reactContext.startForegroundService(intent)
+            } else {
+                reactContext.startService(intent)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TregoBubble", "Failed to start bubble: ${e.message}")
         }
     }
 

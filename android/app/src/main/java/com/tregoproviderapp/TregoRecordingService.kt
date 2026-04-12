@@ -1,12 +1,16 @@
 package com.tregoproviderapp
 
+import android.Manifest
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.media.MediaRecorder
 import android.os.*
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -34,7 +38,21 @@ class TregoRecordingService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIF_ID, buildRecordingNotification())
+
+        // Guard: RECORD_AUDIO must be granted before starting microphone FGS (Android 14+)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "RECORD_AUDIO not granted — stopping service")
+            stopSelf()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_ID, buildRecordingNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        } else {
+            startForeground(NOTIF_ID, buildRecordingNotification())
+        }
         startRecording()
     }
 
@@ -104,37 +122,45 @@ class TregoRecordingService : Service() {
 
         // Upload on background thread
         Thread {
-            val success = uploadAudio(file)
+            val rawText = uploadAndTranscribe(file)
             handler.post {
-                showResult(success)
                 file.delete()
-                // Dismiss after 3 seconds
-                handler.postDelayed({ stopSelf() }, 3_000)
+                if (rawText != null) {
+                    // Store pending text so the Confirm action can submit it
+                    getSharedPreferences("trego_prefs", Context.MODE_PRIVATE).edit()
+                        .putString(TregoNotificationModule.PREFS_PENDING_TEXT, rawText)
+                        .apply()
+                    showReview(rawText)
+                    // Auto-dismiss review after 30 seconds if no action taken
+                    handler.postDelayed({ stopSelf() }, 30_000)
+                } else {
+                    showError()
+                    handler.postDelayed({ stopSelf() }, 4_000)
+                }
             }
         }.start()
     }
 
     // ── Upload ─────────────────────────────────────────────────────────────────
 
-    private fun uploadAudio(file: File): Boolean {
+    /** Uploads audio to /api/jobs/transcribe (transcribe-only, no job created) and returns raw_text. */
+    private fun uploadAndTranscribe(file: File): String? {
         val prefs = getSharedPreferences("trego_prefs", Context.MODE_PRIVATE)
-        val token = prefs.getString("auth_token", null) ?: return false
-        val apiUrl = prefs.getString("api_url", "https://tregoproviderappmobile.onrender.com") ?: return false
+        val token = prefs.getString("auth_token", null) ?: return null
+        val apiUrl = prefs.getString("api_url", "https://tregoproviderappmobile.onrender.com") ?: return null
 
         return try {
             val boundary = "----TregoBoundary${System.currentTimeMillis()}"
-            val url = URL("$apiUrl/api/jobs/voice")
+            val url = URL("$apiUrl/api/jobs/transcribe")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Authorization", "Bearer $token")
             conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-            conn.setRequestProperty("X-Intake-Source", "notification_voice")
             conn.connectTimeout = 30_000
-            conn.readTimeout = 30_000
+            conn.readTimeout = 60_000
             conn.doOutput = true
 
             conn.outputStream.use { out ->
-                // Part: audio
                 val header = "--$boundary\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"${file.name}\"\r\nContent-Type: audio/m4a\r\n\r\n"
                 out.write(header.toByteArray())
                 file.inputStream().use { it.copyTo(out) }
@@ -142,12 +168,20 @@ class TregoRecordingService : Service() {
             }
 
             val code = conn.responseCode
+            if (code !in 200..299) {
+                Log.e(TAG, "Transcribe failed: HTTP $code")
+                return null
+            }
+
+            val body = conn.inputStream.bufferedReader().readText()
             conn.disconnect()
-            Log.d(TAG, "Upload result: HTTP $code")
-            code in 200..299
+            Log.d(TAG, "Transcribe response: $body")
+
+            // Parse raw_text from { "raw_text": "..." }
+            org.json.JSONObject(body).optString("raw_text")?.takeIf { it.isNotBlank() }
         } catch (e: Exception) {
-            Log.e(TAG, "Upload failed", e)
-            false
+            Log.e(TAG, "Transcribe failed", e)
+            null
         }
     }
 
@@ -155,7 +189,7 @@ class TregoRecordingService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(CHANNEL_ID, "Trego Recording", NotificationManager.IMPORTANCE_LOW)
+            val ch = NotificationChannel(CHANNEL_ID, "Trego Recording", NotificationManager.IMPORTANCE_HIGH)
             ch.setShowBadge(false)
             (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
         }
@@ -172,7 +206,7 @@ class TregoRecordingService : Service() {
             .setSmallIcon(R.drawable.ic_mic)
             .setContentTitle("Recording…")
             .setContentText("Tap Stop when you're done speaking")
-            .setColor(0xFF3b82f6.toInt())
+            .setColor(0xFF123A7A.toInt())
             .setColorized(true)
             .setOngoing(true)
             .addAction(android.R.drawable.ic_media_pause, "Stop", stopPending)
@@ -182,21 +216,56 @@ class TregoRecordingService : Service() {
     private fun showUploading() {
         val notif = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentTitle("Processing job…")
-            .setContentText("Uploading your voice note")
-            .setColor(0xFF3b82f6.toInt())
+            .setContentTitle("Processing…")
+            .setContentText("Transcribing your voice note")
+            .setColor(0xFF123A7A.toInt())
             .setProgress(0, 0, true)
             .setOngoing(true)
             .build()
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID, notif)
     }
 
-    private fun showResult(success: Boolean) {
+    private fun showReview(rawText: String) {
+        // Use getActivity() — broadcast PendingIntents are blocked by some OEMs for FGS notifications
+        val confirmIntent = android.app.PendingIntent.getActivity(
+            this, 20,
+            Intent(this, TregoNotifActionActivity::class.java).apply {
+                putExtra(TregoNotifActionActivity.EXTRA_ACTION, TregoNotifActionActivity.ACTION_CONFIRM)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            },
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val redoIntent = android.app.PendingIntent.getActivity(
+            this, 21,
+            Intent(this, TregoNotifActionActivity::class.java).apply {
+                putExtra(TregoNotifActionActivity.EXTRA_ACTION, TregoNotifActionActivity.ACTION_REDO)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            },
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val preview = if (rawText.length > 80) rawText.take(77) + "…" else rawText
+
         val notif = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(if (success) android.R.drawable.checkbox_on_background else android.R.drawable.ic_dialog_alert)
-            .setContentTitle(if (success) "Job logged!" else "Upload failed")
-            .setContentText(if (success) "Your job is being structured by AI" else "Please open the app and try again")
-            .setColor(if (success) 0xFF3b82f6.toInt() else 0xFFef4444.toInt())
+            .setSmallIcon(R.drawable.ic_notif_trego)
+            .setContentTitle("Did you say this?")
+            .setContentText("\"$preview\"")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("\"$rawText\""))
+            .setColor(0xFF123A7A.toInt())
+            .setColorized(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .addAction(android.R.drawable.ic_menu_send, "Send it", confirmIntent)
+            .addAction(android.R.drawable.ic_menu_rotate, "Redo", redoIntent)
+            .build()
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID, notif)
+    }
+
+    private fun showError() {
+        val notif = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Upload failed")
+            .setContentText("Please open the app and try again")
+            .setColor(0xFFef4444.toInt())
             .setAutoCancel(true)
             .build()
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID, notif)

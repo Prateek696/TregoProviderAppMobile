@@ -25,6 +25,7 @@ import { StartupOrb } from '../components/StartupOrb';
 import { Button } from '../components/ui/Button';
 import { Colors } from '../shared/constants/colors';
 import { WorkingHoursConfirmationModal } from '../components/modals/WorkingHoursConfirmationModal';
+import { useTranslation } from 'react-i18next';
 
 export interface TimeBlock {
   id: string;
@@ -57,21 +58,21 @@ interface WorkingHoursScreenProps {
   initialWorkingHours?: WorkingHours;
 }
 
-const DAYS = [
-  { key: 'monday' as keyof WorkingHours, short: 'M', full: 'Monday' },
-  { key: 'tuesday' as keyof WorkingHours, short: 'T', full: 'Tuesday' },
-  { key: 'wednesday' as keyof WorkingHours, short: 'W', full: 'Wednesday' },
-  { key: 'thursday' as keyof WorkingHours, short: 'T', full: 'Thursday' },
-  { key: 'friday' as keyof WorkingHours, short: 'F', full: 'Friday' },
-  { key: 'saturday' as keyof WorkingHours, short: 'S', full: 'Saturday' },
-  { key: 'sunday' as keyof WorkingHours, short: 'S', full: 'Sunday' },
+const DAY_KEYS = [
+  { key: 'monday' as keyof WorkingHours, short: 'M', longKey: 'mondayLong' },
+  { key: 'tuesday' as keyof WorkingHours, short: 'T', longKey: 'tuesdayLong' },
+  { key: 'wednesday' as keyof WorkingHours, short: 'W', longKey: 'wednesdayLong' },
+  { key: 'thursday' as keyof WorkingHours, short: 'T', longKey: 'thursdayLong' },
+  { key: 'friday' as keyof WorkingHours, short: 'F', longKey: 'fridayLong' },
+  { key: 'saturday' as keyof WorkingHours, short: 'S', longKey: 'saturdayLong' },
+  { key: 'sunday' as keyof WorkingHours, short: 'S', longKey: 'sundayLong' },
 ];
 
-const QUICK_RANGES = [
-  { name: 'Morning', start: '08:00', end: '12:00' },
-  { name: 'Afternoon', start: '12:00', end: '18:00' },
-  { name: 'Evening', start: '18:00', end: '22:00' },
-  { name: '24 Hours', start: '00:00', end: '24:00' },
+const QUICK_RANGE_KEYS = [
+  { nameKey: 'morning', start: '08:00', end: '12:00' },
+  { nameKey: 'afternoon', start: '12:00', end: '18:00' },
+  { nameKey: 'evening', start: '18:00', end: '22:00' },
+  { nameKey: 'twentyFourHours', start: '00:00', end: '24:00' },
 ];
 
 const generateTimeOptions = () => {
@@ -110,6 +111,9 @@ export default function WorkingHoursScreen({
   onContinue,
   initialWorkingHours,
 }: WorkingHoursScreenProps) {
+  const { t } = useTranslation();
+  const DAYS = DAY_KEYS.map(d => ({ ...d, full: t(`days.${d.longKey}` as any) }));
+  const QUICK_RANGES = QUICK_RANGE_KEYS.map(r => ({ ...r, name: t(`workingHours.${r.nameKey}` as any) }));
   const [workingHours, setWorkingHours] = useState<WorkingHours>(
     initialWorkingHours || createDefaultWorkingHours()
   );
@@ -193,7 +197,7 @@ export default function WorkingHoursScreen({
     }));
   };
 
-  const applyQuickRange = (day: keyof WorkingHours, range: typeof QUICK_RANGES[0]) => {
+  const applyQuickRange = (day: keyof WorkingHours, range: { name: string; start: string; end: string }) => {
     setWorkingHours(prev => ({
       ...prev,
       [day]: {
@@ -267,8 +271,8 @@ export default function WorkingHoursScreen({
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Set your working hours</Text>
-          <Text style={styles.subtitle}>Tell us when you're available for jobs.</Text>
+          <Text style={styles.title}>{t('workingHours.title')}</Text>
+          <Text style={styles.subtitle}>{t('workingHours.subtitle')}</Text>
         </View>
 
         {/* Day Selector */}
@@ -300,7 +304,7 @@ export default function WorkingHoursScreen({
             })}
           </View>
           <Text style={styles.daySelectorHint}>
-            Click to select • Double-click to toggle on/off
+            {t('workingHours.selectorHint')}
           </Text>
         </View>
 
@@ -313,7 +317,7 @@ export default function WorkingHoursScreen({
             <View style={styles.hoursCardTitleRow}>
               <Text style={styles.clockIcon}>🕐</Text>
               <Text style={styles.hoursCardTitle}>
-                {DAYS.find(d => d.key === selectedDay)?.full} Hours
+                {t('workingHours.hoursLabel', { day: DAYS.find(d => d.key === selectedDay)?.full })}
               </Text>
             </View>
             <TouchableOpacity
@@ -329,7 +333,7 @@ export default function WorkingHoursScreen({
                   currentDaySchedule.active && styles.activeButtonTextActive,
                   !currentDaySchedule.active && { color: orbColor },
                 ]}>
-                {currentDaySchedule.active ? 'Active' : 'Inactive'}
+                {currentDaySchedule.active ? t('workingHours.active') : t('workingHours.inactive')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -337,7 +341,7 @@ export default function WorkingHoursScreen({
           <Animated.View style={[styles.hoursContent, animatedStyle]}>
             {/* Quick Ranges */}
             <View style={styles.quickRangesContainer}>
-              <Text style={styles.quickRangesLabel}>Quick ranges:</Text>
+              <Text style={styles.quickRangesLabel}>{t('workingHours.quickRanges')}</Text>
               <View style={styles.quickRangesRow}>
                 {QUICK_RANGES.map(range => (
                   <TouchableOpacity
@@ -425,7 +429,7 @@ export default function WorkingHoursScreen({
                     styles.addTimeBlockText,
                     { color: currentDaySchedule.active ? orbColor : '#4b5563' },
                   ]}>
-                  + Add time block
+                  {t('workingHours.addTimeBlock')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -435,7 +439,7 @@ export default function WorkingHoursScreen({
               <View style={styles.lunchBreakHeader}>
                 <View style={styles.lunchBreakTitleRow}>
                   <Text style={styles.coffeeIcon}>☕</Text>
-                  <Text style={styles.lunchBreakTitle}>Lunch break</Text>
+                  <Text style={styles.lunchBreakTitle}>{t('workingHours.lunchBreak')}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => toggleLunchBreak(selectedDay)}
@@ -450,7 +454,7 @@ export default function WorkingHoursScreen({
                       styles.lunchBreakToggleText,
                       currentDaySchedule.hasLunchBreak && styles.lunchBreakToggleTextActive,
                     ]}>
-                    {currentDaySchedule.hasLunchBreak ? 'On' : 'Off'}
+                    {currentDaySchedule.hasLunchBreak ? t('workingHours.on') : t('workingHours.off')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -495,9 +499,7 @@ export default function WorkingHoursScreen({
         {/* Helper Text */}
         <View style={styles.helperTextContainer}>
           <Text style={styles.helperText}>
-            You'll always be able to adjust your hours in the back office, and change
-            availabilities, holidays, or sick days. We'll help you reorganize your schedule
-            automatically.
+            {t('workingHours.helperText')}
           </Text>
         </View>
       </ScrollView>
@@ -505,10 +507,10 @@ export default function WorkingHoursScreen({
       {/* Footer with Continue Button */}
       <View style={styles.footer}>
         <TouchableOpacity onPress={onBack} style={styles.backButtonTouchable}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>{t('workingHours.back')}</Text>
         </TouchableOpacity>
         <Button
-          title="Continue"
+          title={t('workingHours.continue')}
           onPress={handleContinue}
           disabled={!isValid()}
           style={[styles.continueButton, { backgroundColor: orbColor }]}

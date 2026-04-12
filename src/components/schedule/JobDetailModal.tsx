@@ -12,12 +12,15 @@ import {
     StatusBar,
     Alert,
     ActivityIndicator,
+    Platform,
+    PermissionsAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { BlurView } from '@react-native-community/blur';
 import { useNavigation } from '@react-navigation/native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { jobsAPI } from '../../services/api';
+import { useTranslation } from 'react-i18next';
 
 interface JobDetailModalProps {
     visible: boolean;
@@ -42,6 +45,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
     onMessage,
     onStatusChange
 }) => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('details');
     const [photos, setPhotos] = useState<Array<{ uri: string; phase: string }>>([]);
     const [uploading, setUploading] = useState(false);
@@ -60,30 +64,36 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
     const handleAddPhoto = () => {
         // Step 1 — pick phase
-        Alert.alert('Photo Type', 'When was this photo taken?', [
-            { text: 'Before', onPress: () => pickSource('before') },
-            { text: 'During', onPress: () => pickSource('during') },
-            { text: 'After',  onPress: () => pickSource('after') },
-            { text: 'Cancel', style: 'cancel' },
+        Alert.alert(t('modals.photo.phaseTitle'), t('modals.photo.phaseMessage'), [
+            { text: t('jobs.before'), onPress: () => pickSource('before') },
+            { text: t('jobs.during'), onPress: () => pickSource('during') },
+            { text: t('jobs.after'),  onPress: () => pickSource('after') },
+            { text: t('common.cancel'), style: 'cancel' },
         ]);
     };
 
     const pickSource = (phase: 'before' | 'during' | 'after') => {
         // Step 2 — pick camera or gallery
-        Alert.alert('Add Photo', 'Choose source', [
+        Alert.alert(t('jobs.addPhoto'), t('jobs.chooseSource'), [
             {
-                text: 'Camera',
-                onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
-                    if (res.assets?.[0]?.uri) await uploadPhoto(res.assets[0].uri, phase);
-                }),
+                text: t('common.camera'),
+                onPress: async () => {
+                    if (Platform.OS === 'android') {
+                        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+                        if (granted !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert(t('common.permissionRequired'), t('common.cameraPermissionNeeded')); return; }
+                    }
+                    launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
+                        if (res.assets?.[0]?.uri) await uploadPhoto(res.assets[0].uri, phase);
+                    });
+                },
             },
             {
-                text: 'Gallery',
+                text: t('common.gallery'),
                 onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async (res) => {
                     if (res.assets?.[0]?.uri) await uploadPhoto(res.assets[0].uri, phase);
                 }),
             },
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
         ]);
     };
 
@@ -96,7 +106,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
         } catch {
             // Remove the optimistic photo on failure
             setPhotos(prev => prev.filter(p => p.uri !== uri));
-            Alert.alert('Upload failed', 'Could not upload photo. Please try again.');
+            Alert.alert(t('jobDetail.uploadFailed'), t('jobDetail.uploadFailedMsg'));
         } finally {
             setUploading(false);
         }
@@ -175,7 +185,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                     <Text style={styles.headerTitle} numberOfLines={1}>{job.title}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border, borderWidth: 1 }]}>
                         <View style={[styles.statusDot, { backgroundColor: statusStyle.text }]} />
-                        <Text style={[styles.statusText, { color: statusStyle.text }]}>{job.status || 'Pending'}</Text>
+                        <Text style={[styles.statusText, { color: statusStyle.text }]}>{job.status || t('jobDetail.statusPending')}</Text>
                     </View>
                 </View>
 
@@ -184,22 +194,22 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
                     {/* Scheduling Section */}
                     <View style={styles.card}>
-                        {renderSectionHeader('calendar-clock', 'Scheduling')}
+                        {renderSectionHeader('calendar-clock', t('jobDetail.scheduling'))}
                         <View style={styles.grid}>
                             <View style={styles.gridItem}>
-                                <Text style={styles.gridLabel}>Start Time</Text>
+                                <Text style={styles.gridLabel}>{t('jobDetail.startTime')}</Text>
                                 <Text style={styles.gridValue}>{job.scheduledTime || job.time || '—'}</Text>
                             </View>
                             <View style={styles.gridItem}>
-                                <Text style={styles.gridLabel}>Duration</Text>
-                                <Text style={styles.gridValue}>{job.estimatedDurationMinutes || job.duration || 60} min</Text>
+                                <Text style={styles.gridLabel}>{t('jobDetail.duration')}</Text>
+                                <Text style={styles.gridValue}>{t('jobDetail.minutes', { n: job.estimatedDurationMinutes || job.duration || 60 })}</Text>
                             </View>
                         </View>
                         <View style={styles.divider} />
                         {scheduledDate && (
                             <View style={styles.row}>
                                 <View>
-                                    <Text style={styles.gridLabel}>Date</Text>
+                                    <Text style={styles.gridLabel}>{t('jobDetail.date')}</Text>
                                     <Text style={styles.gridValue}>{scheduledDate}</Text>
                                 </View>
                             </View>
@@ -209,11 +219,11 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                         <View style={styles.jobActionsRow}>
                             <TouchableOpacity style={styles.secondaryButton}>
                                 <Icon name="calendar-refresh" size={16} color="#fff" />
-                                <Text style={styles.secondaryButtonText}>Reschedule</Text>
+                                <Text style={styles.secondaryButtonText}>{t('jobDetail.reschedule')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.secondaryButton} onPress={() => { onClose(); navigation.navigate('Calendar'); }}>
                                 <Icon name="calendar-month" size={16} color="#fff" />
-                                <Text style={styles.secondaryButtonText}>View Calendar</Text>
+                                <Text style={styles.secondaryButtonText}>{t('jobDetail.viewCalendar')}</Text>
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity
@@ -221,29 +231,29 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                             onPress={() => onStatusChange && onStatusChange(job.id, 'en-route')}
                         >
                             <Icon name="play" size={20} color="#fff" />
-                            <Text style={styles.primaryButtonText}>Resume Job</Text>
+                            <Text style={styles.primaryButtonText}>{t('jobDetail.resumeJob')}</Text>
                         </TouchableOpacity>
 
                     </View>
 
                     {/* Billing Actions */}
                     <View style={styles.card}>
-                        {renderSectionHeader('credit-card-outline', 'Billing & Expenses')}
+                        {renderSectionHeader('credit-card-outline', t('jobDetail.billingExpenses'))}
                         <View style={styles.actionButtonsRow}>
                             <TouchableOpacity style={styles.secondaryButton}>
                                 <Icon name="plus" size={16} color="#fff" />
-                                <Text style={styles.secondaryButtonText}>Add Expense</Text>
+                                <Text style={styles.secondaryButtonText}>{t('jobDetail.addExpense')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.secondaryButton}>
                                 <Icon name="file-document-outline" size={16} color="#fff" />
-                                <Text style={styles.secondaryButtonText}>Create Invoice</Text>
+                                <Text style={styles.secondaryButtonText}>{t('jobDetail.createInvoice')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Job Details Section */}
                     <View style={styles.card}>
-                        {renderSectionHeader('file-document-outline', 'Job Details')}
+                        {renderSectionHeader('file-document-outline', t('jobDetail.details'))}
 
                         {job.category && (
                             <View style={styles.tagsRow}>
@@ -255,7 +265,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
                         {job.description ? (
                             <View style={styles.detailBlock}>
-                                <Text style={styles.detailLabel}>DESCRIPTION</Text>
+                                <Text style={styles.detailLabel}>{t('jobDetail.description')}</Text>
                                 <View style={styles.detailBox}>
                                     <Text style={styles.detailText}>{job.description}</Text>
                                 </View>
@@ -264,7 +274,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
                         {job.notes ? (
                             <View style={styles.detailBlock}>
-                                <Text style={styles.detailLabel}>NOTES</Text>
+                                <Text style={styles.detailLabel}>{t('jobDetail.notes')}</Text>
                                 <View style={styles.detailBox}>
                                     <Text style={styles.detailText}>{job.notes}</Text>
                                 </View>
@@ -275,7 +285,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                             {job.priority && (
                                 <View style={styles.infoListItem}>
                                     <Icon name="alert-circle-outline" size={16} color="#9ca3af" />
-                                    <Text style={styles.infoListText}>Priority</Text>
+                                    <Text style={styles.infoListText}>{t('jobDetail.priority')}</Text>
                                     <View style={[styles.priorityBadge, { backgroundColor: `${getPriorityColor(job.priority)}33` }]}>
                                         <Text style={[styles.priorityText, { color: getPriorityColor(job.priority) }]}>{job.priority.toUpperCase()}</Text>
                                     </View>
@@ -284,7 +294,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                             {job.estimatedPrice && (
                                 <View style={styles.infoListItem}>
                                     <Icon name="currency-eur" size={16} color="#9ca3af" />
-                                    <Text style={styles.infoListText}>Price</Text>
+                                    <Text style={styles.infoListText}>{t('jobDetail.price')}</Text>
                                     <Text style={[styles.infoListText, { color: '#10b981' }]}>{job.estimatedPrice}</Text>
                                 </View>
                             )}
@@ -294,21 +304,21 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
                     {/* Photos Card */}
                     <View style={styles.card}>
-                        {renderSectionHeader('camera-outline', 'Photos', (
+                        {renderSectionHeader('camera-outline', t('jobDetail.photos'), (
                             <TouchableOpacity
                                 style={styles.addPhotoBtn}
                                 onPress={handleAddPhoto}
                                 disabled={uploading}>
                                 {uploading
                                     ? <ActivityIndicator size="small" color="#fff" />
-                                    : <><Icon name="plus" size={14} color="#fff" /><Text style={styles.addPhotoBtnText}>Add</Text></>
+                                    : <><Icon name="plus" size={14} color="#fff" /><Text style={styles.addPhotoBtnText}>{t('jobDetail.add')}</Text></>
                                 }
                             </TouchableOpacity>
                         ))}
                         {photos.length === 0 ? (
                             <TouchableOpacity style={styles.emptyPhotos} onPress={handleAddPhoto}>
                                 <Icon name="camera-plus-outline" size={32} color="#334155" />
-                                <Text style={styles.emptyPhotosText}>Tap to add a photo</Text>
+                                <Text style={styles.emptyPhotosText}>{t('jobDetail.tapToAddPhoto')}</Text>
                             </TouchableOpacity>
                         ) : (
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
@@ -330,7 +340,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                     {/* Location Section */}
                     {(job.address || job.location) && (
                         <View style={styles.card}>
-                            {renderSectionHeader('map-marker-outline', 'Location')}
+                            {renderSectionHeader('map-marker-outline', t('jobDetail.location'))}
                             <Text style={styles.addressText}>{job.address || job.location}</Text>
                         </View>
                     )}
@@ -338,7 +348,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                     {/* Client Information */}
                     {job.client && (
                         <View style={styles.card}>
-                            {renderSectionHeader('account-outline', 'Client Information')}
+                            {renderSectionHeader('account-outline', t('jobDetail.clientInfo'))}
                             <View style={styles.clientProfile}>
                                 <View style={[styles.avatar, { backgroundColor: '#3b82f6' }]}>
                                     <Text style={styles.avatarText}>{job.client.substring(0, 2).toUpperCase()}</Text>
@@ -351,7 +361,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                                     <View style={styles.clientDetailRow}>
                                         <Icon name="phone-outline" size={16} color="#9ca3af" />
                                         <View>
-                                            <Text style={styles.clientDetailLabel}>Phone</Text>
+                                            <Text style={styles.clientDetailLabel}>{t('jobDetail.phoneLabel')}</Text>
                                             <Text style={styles.clientDetailValueLink}>{clientPhone}</Text>
                                         </View>
                                     </View>
@@ -360,7 +370,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                                     <View style={styles.clientDetailRow}>
                                         <Icon name="email-outline" size={16} color="#9ca3af" />
                                         <View>
-                                            <Text style={styles.clientDetailLabel}>Email</Text>
+                                            <Text style={styles.clientDetailLabel}>{t('jobDetail.emailLabel')}</Text>
                                             <Text style={styles.clientDetailValueLink}>{clientEmail}</Text>
                                         </View>
                                     </View>
@@ -369,7 +379,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
                                     <View style={styles.clientDetailRow}>
                                         <Icon name="file-document-outline" size={16} color="#9ca3af" />
                                         <View>
-                                            <Text style={styles.clientDetailLabel}>NIF</Text>
+                                            <Text style={styles.clientDetailLabel}>{t('jobDetail.nifLabel')}</Text>
                                             <Text style={styles.clientDetailValue}>PT{job.clientNif}</Text>
                                         </View>
                                     </View>
@@ -381,14 +391,14 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
 
                     {/* Timeline History */}
                     <View style={styles.card}>
-                        {renderSectionHeader('history', 'Job Timeline')}
-                        <Text style={{ color: '#64748b', fontSize: 13 }}>No timeline events yet.</Text>
+                        {renderSectionHeader('history', t('jobDetail.timeline'))}
+                        <Text style={{ color: '#64748b', fontSize: 13 }}>{t('jobDetail.noTimeline')}</Text>
                     </View>
 
                     {/* Expenses */}
                     <View style={styles.card}>
-                        {renderSectionHeader('wallet-outline', 'Job Expenses')}
-                        <Text style={{ color: '#64748b', fontSize: 13 }}>No expenses recorded.</Text>
+                        {renderSectionHeader('wallet-outline', t('jobDetail.jobExpenses'))}
+                        <Text style={{ color: '#64748b', fontSize: 13 }}>{t('jobDetail.noExpenses')}</Text>
                     </View>
 
                 </ScrollView>

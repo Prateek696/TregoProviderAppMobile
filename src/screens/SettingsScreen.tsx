@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,17 +8,21 @@ import {
   Switch,
   Alert,
   Platform,
-  Image,
+  PermissionsAndroid,
+  NativeModules,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import { profileAPI, getAPIError } from '../services/api';
+import LanguageToggle from '../components/LanguageToggle';
+import { useTranslation } from 'react-i18next';
 
 type SettingsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'Settings'>;
-type SettingSection = 'main' | 'account' | 'assistant' | 'app' | 'billing' | 'privacy' | 'legal' | 'help';
+type SettingSection = 'main' | 'account' | 'assistant' | 'app' | 'privacy' | 'legal' | 'help';
 
 // Define specific colors for this screen to match the screenshot exactly
 const S_COLORS = {
@@ -37,51 +41,59 @@ const S_COLORS = {
 };
 
 export default function SettingsScreen() {
+  const { t, i18n } = useTranslation();
   const navigation = useNavigation<SettingsScreenNavigationProp>();
   const [orbColor, setOrbColor] = useState('#3b82f6');
-  const [completionPercent, setCompletionPercent] = useState(50);
   const [currentSection, setCurrentSection] = useState<SettingSection>('main');
+
+  // Real data from API
+  const [profile, setProfile] = useState<any>(null);
+  const [completionPercent, setCompletionPercent] = useState(0);
 
   // App Settings State
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [msgNotifications, setMsgNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true); // Default to dark for this theme
 
-  // Privacy State
-  const [twoFactor, setTwoFactor] = useState(false);
-  const [analytics, setAnalytics] = useState(true);
-  const [marketing, setMarketing] = useState(true);
+  // Real permission states
+  const [locationPerm, setLocationPerm] = useState(false);
+  const [cameraPerm, setCameraPerm] = useState(false);
 
-  // Assistant State
-  const [showTutorial, setShowTutorial] = useState(true);
-  const [voiceMessages, setVoiceMessages] = useState(true);
-  const [typingAnimation, setTypingAnimation] = useState(true);
-  // AI settings from backend
+  // Job Automation from backend
   const [digestEnabled, setDigestEnabled] = useState(true);
-  const [postCallThreshold, setPostCallThreshold] = useState(30); // seconds
+  const [postCallThreshold, setPostCallThreshold] = useState(30);
   const [quietHoursEnabled, setQuietHoursEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
 
-  // Billing State
-  const [autoRecharge, setAutoRecharge] = useState(false);
-  const [billingLevel, setBillingLevel] = useState(2); // Example value
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useFocusEffect(useCallback(() => { loadSettings(); }, []));
 
   const loadSettings = async () => {
     try {
       const color = await jsonStorage.getItem(STORAGE_KEYS.ORB_COLOR);
       if (color) setOrbColor(color as string);
 
-      // Load backend settings
-      const res = await profileAPI.get();
-      const settings = res.data?.provider?.settings || {};
-      if (typeof settings.digest_enabled === 'boolean') setDigestEnabled(settings.digest_enabled);
-      if (typeof settings.post_call_threshold === 'number') setPostCallThreshold(settings.post_call_threshold);
-      if (typeof settings.quiet_hours_enabled === 'boolean') setQuietHoursEnabled(settings.quiet_hours_enabled);
+      // Load real profile + stats (independently — one failure shouldn't block the other)
+      try {
+        const profileRes = await profileAPI.get();
+        const p = profileRes.data?.provider;
+        setProfile(p);
+
+        const checks = [!!p?.name, !!p?.phone, !!p?.nif, !!p?.trade,
+          p?.services?.length > 0, p?.locations?.length > 0,
+          p?.working_hours?.some((h: any) => h.is_active),
+          !!(p?.coverage_cities?.length || p?.coverage_radius)];
+        setCompletionPercent(Math.round(checks.filter(Boolean).length / checks.length * 100));
+      } catch (e) { console.warn('Profile load failed:', e); }
+
+      // Stats/rating removed — Dashboard not in MVP
+
+      // Check real permissions
+      if (Platform.OS === 'android') {
+        const loc = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+        const cam = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+        setLocationPerm(loc);
+        setCameraPerm(cam);
+      }
     } catch (error) {
       console.error('Error loading settings:', error);
     }
@@ -116,6 +128,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       )}
       <Text style={styles.headerTitle}>{title}</Text>
+      <LanguageToggle />
       <TouchableOpacity style={styles.notificationButton}>
         <Icon name="bell-outline" size={24} color={S_COLORS.textPrimary} />
         <View style={styles.notificationBadge}>
@@ -164,156 +177,83 @@ export default function SettingsScreen() {
 
   const renderAppSettings = () => (
     <View style={styles.subScreenContainer}>
-      <Text style={styles.subSectionHeader}>Notifications</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.notifications')}</Text>
       <View style={styles.cardDark}>
-        {renderToggleItem('Push Notifications', 'Receive job alerts and messages', notificationsEnabled, setNotificationsEnabled)}
+        {renderToggleItem(t('settings.pushNotifications'), t('settings.pushNotificationsDesc'), notificationsEnabled, setNotificationsEnabled)}
         <View style={styles.separator} />
-        {renderToggleItem('Job Alert Sound', 'Play sound for new jobs', soundEnabled, setSoundEnabled)}
+        {renderToggleItem(t('settings.jobAlertSound'), t('settings.jobAlertSoundDesc'), soundEnabled, setSoundEnabled)}
         <View style={styles.separator} />
-        {renderToggleItem('Message Notifications', 'Client chat notifications', msgNotifications, setMsgNotifications)}
+        {renderToggleItem(t('settings.messageNotifications'), t('settings.messageNotificationsDesc'), msgNotifications, setMsgNotifications)}
       </View>
 
-      <Text style={styles.subSectionHeader}>Appearance</Text>
-      <View style={styles.cardDark}>
-        {renderToggleItem('Dark Mode', 'Switch to dark theme', darkMode, setDarkMode)}
-      </View>
-
-      <Text style={styles.subSectionHeader}>Language & Region</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.languageRegion')}</Text>
       <View style={styles.cardDark}>
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="web" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>Language</Text>
-          <Text style={styles.actionRowValue}>English</Text>
+          <Text style={styles.actionRowText}>{t('settings.language')}</Text>
+          <Text style={styles.actionRowValue}>{i18n.language === 'pt' ? t('settings.portuguese') : t('settings.english')}</Text>
           <Icon name="chevron-right" size={20} color={S_COLORS.textSecondary} />
         </TouchableOpacity>
         <View style={styles.separator} />
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="map-marker" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>Region</Text>
-          <Text style={styles.actionRowValue}>Portugal</Text>
+          <Text style={styles.actionRowText}>{t('settings.region')}</Text>
+          <Text style={styles.actionRowValue}>{t('settings.portugal')}</Text>
           <Icon name="chevron-right" size={20} color={S_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  const renderBillingSettings = () => (
-    <View style={styles.subScreenContainer}>
-      <Text style={styles.subSectionHeader}>App Billing</Text>
-      <View style={styles.cardDark}>
-        {renderInfoRow('Current Plan', 'Professional')}
-        <View style={styles.separator} />
-        {renderInfoRow('Billing Cycle', 'Monthly - €29.99/month')}
-        <View style={styles.separator} />
-        {renderInfoRow('Next Billing Date', 'February 1, 2025')}
-        <View style={styles.separator} />
-        <TouchableOpacity style={styles.actionButton}>
-          <Icon name="credit-card" size={18} color={orbColor} style={{ marginRight: 8 }} />
-          <Text style={{ color: orbColor, fontWeight: '600' }}>View Billing History</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.subSectionHeader}>Lead Credits</Text>
-      <View style={styles.cardDark}>
-        <View style={styles.creditBalanceRow}>
-          <View>
-            <Text style={styles.toggleLabel}>Available Credits</Text>
-            <Text style={styles.toggleSubtitle}>Use for premium leads</Text>
-          </View>
-          <Text style={[styles.bigNumber, { color: orbColor }]}>50</Text>
-        </View>
-        <View style={styles.separator} />
-        <TouchableOpacity style={styles.actionButton}>
-          <Icon name="currency-usd" size={18} color={orbColor} style={{ marginRight: 8 }} />
-          <Text style={{ color: orbColor, fontWeight: '600' }}>Buy More Credits</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.subSectionHeader}>Auto-Recharge</Text>
-      <View style={styles.cardDark}>
-        {renderToggleItem('Enable Auto-Recharge', 'Buy 50 credits when below 10', autoRecharge, setAutoRecharge)}
-      </View>
-    </View>
-  );
+  // Billing removed — no billing system in MVP
 
   const renderPrivacySecurity = () => (
     <View style={styles.subScreenContainer}>
-      <Text style={styles.subSectionHeader}>Login & Security</Text>
-      <View style={styles.cardDark}>
-        <TouchableOpacity style={styles.actionRow}>
-          <Icon name="shield-outline" size={20} color={orbColor} style={{ marginRight: 10 }} />
-          <Text style={[styles.actionRowText, { color: orbColor }]}>Change Password</Text>
-        </TouchableOpacity>
-        <View style={styles.separator} />
-        {renderToggleItem('Two-Factor Authentication', 'Add extra security', twoFactor, setTwoFactor)}
-        <View style={styles.separator} />
-        <TouchableOpacity style={styles.actionRow}>
-          <Icon name="bell-outline" size={20} color={orbColor} style={{ marginRight: 10 }} />
-          <Text style={[styles.actionRowText, { color: orbColor }]}>Login Activity</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.subSectionHeader}>Data & Privacy</Text>
-      <View style={styles.cardDark}>
-        <TouchableOpacity style={styles.actionRow}>
-          <Icon name="file-document-outline" size={20} color={orbColor} style={{ marginRight: 10 }} />
-          <Text style={[styles.actionRowText, { color: orbColor }]}>Download My Data</Text>
-        </TouchableOpacity>
-        <View style={styles.separator} />
-        {renderToggleItem('Analytics & Tracking', 'Help us improve', analytics, setAnalytics)}
-        <View style={styles.separator} />
-        {renderToggleItem('Marketing Communications', 'Tips and updates', marketing, setMarketing)}
-      </View>
-
-      <Text style={styles.subSectionHeader}>Permissions</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.permissions')}</Text>
       <View style={styles.cardDark}>
         <View style={styles.actionRow}>
           <Icon name="map-marker" size={18} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.toggleLabel}>Location</Text>
-            <Text style={styles.toggleSubtitle}>For service area</Text>
+            <Text style={styles.toggleLabel}>{t('settings.location')}</Text>
+            <Text style={styles.toggleSubtitle}>{t('settings.locationDesc')}</Text>
           </View>
-          <View style={styles.badgeSuccess}><Text style={styles.badgeText}>Enabled</Text></View>
+          <View style={locationPerm ? styles.badgeSuccess : styles.badgeDanger}>
+            <Text style={locationPerm ? styles.badgeText : styles.badgeTextDanger}>
+              {locationPerm ? t('settings.enabled') : t('settings.disabled')}
+            </Text>
+          </View>
         </View>
         <View style={styles.separator} />
         <View style={styles.actionRow}>
           <Icon name="camera" size={18} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.toggleLabel}>Camera</Text>
-            <Text style={styles.toggleSubtitle}>For receipts and photos</Text>
+            <Text style={styles.toggleLabel}>{t('settings.cameraPermission')}</Text>
+            <Text style={styles.toggleSubtitle}>{t('settings.cameraPermissionDesc')}</Text>
           </View>
-          <View style={styles.badgeSuccess}><Text style={styles.badgeText}>Enabled</Text></View>
+          <View style={cameraPerm ? styles.badgeSuccess : styles.badgeDanger}>
+            <Text style={cameraPerm ? styles.badgeText : styles.badgeTextDanger}>
+              {cameraPerm ? t('settings.enabled') : t('settings.disabled')}
+            </Text>
+          </View>
         </View>
+      </View>
+
+      <Text style={styles.subSectionHeader}>{t('settings.account')}</Text>
+      <View style={styles.cardDark}>
+        {renderInfoRow(t('profile.phone'), profile?.phone || '—')}
+        <View style={styles.separator} />
+        {renderInfoRow(t('settings.authMethod'), t('settings.authMethodValue'))}
       </View>
     </View>
   );
 
   const renderAssistantSettings = () => (
     <View style={styles.subScreenContainer}>
-      <View style={styles.cardDark}>
-        <Text style={[styles.cardTitle, { marginBottom: 4 }]}>Customize AI Chat</Text>
-        <Text style={[styles.cardSubtitle, { marginBottom: 16 }]}>Personalize your assistant</Text>
-
-        <TouchableOpacity style={[styles.outlineButton, { borderColor: orbColor }]}>
-          <Icon name="sparkles" size={18} color={orbColor} style={{ marginRight: 8 }} />
-          <Text style={{ color: orbColor, fontWeight: '600' }}>Customize Assistant</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.subSectionHeader}>Chat Preferences</Text>
-      <View style={styles.cardDark}>
-        {renderToggleItem('Show Tutorial', 'Display chat interface guide', showTutorial, setShowTutorial)}
-        <View style={styles.separator} />
-        {renderToggleItem('Voice Messages', 'Enable voice recording', voiceMessages, setVoiceMessages)}
-        <View style={styles.separator} />
-        {renderToggleItem('Typing Animations', 'Character reveal effect', typingAnimation, setTypingAnimation)}
-      </View>
-
-      <Text style={styles.subSectionHeader}>Job Automation</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.jobAutomation')}</Text>
       <View style={styles.cardDark}>
         {renderToggleItem(
-          'Daily Digest',
-          'Receive end-of-day job summary (19:00 PT)',
+          t('settings.dailyDigest'),
+          t('settings.dailyDigestDesc'),
           digestEnabled,
           (val) => {
             setDigestEnabled(val);
@@ -322,8 +262,8 @@ export default function SettingsScreen() {
         )}
         <View style={styles.separator} />
         {renderToggleItem(
-          'Quiet Hours (21:00 – 07:00)',
-          'No non-critical notifications during these hours',
+          t('settings.quietHours'),
+          t('settings.quietHoursDesc'),
           quietHoursEnabled,
           (val) => {
             setQuietHoursEnabled(val);
@@ -333,8 +273,8 @@ export default function SettingsScreen() {
         <View style={styles.separator} />
         <View style={styles.toggleItem}>
           <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={styles.toggleLabel}>Post-Call Prompt</Text>
-            <Text style={styles.toggleSubtitle}>Trigger after calls longer than {postCallThreshold}s</Text>
+            <Text style={styles.toggleLabel}>{t('settings.postCallPrompt')}</Text>
+            <Text style={styles.toggleSubtitle}>{t('settings.postCallDesc', { seconds: postCallThreshold })}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableOpacity
@@ -343,6 +283,8 @@ export default function SettingsScreen() {
                 const v = Math.max(10, postCallThreshold - 10);
                 setPostCallThreshold(v);
                 saveBackendSettings({ post_call_threshold: v });
+                // Save to native SharedPrefs so TregoPersistentService reads it
+                NativeModules.TregoNotification?.setPostCallThreshold?.(v);
               }}>
               <Icon name="minus" size={16} color={orbColor} />
             </TouchableOpacity>
@@ -353,6 +295,7 @@ export default function SettingsScreen() {
                 const v = Math.min(120, postCallThreshold + 10);
                 setPostCallThreshold(v);
                 saveBackendSettings({ post_call_threshold: v });
+                NativeModules.TregoNotification?.setPostCallThreshold?.(v);
               }}>
               <Icon name="plus" size={16} color={orbColor} />
             </TouchableOpacity>
@@ -360,14 +303,10 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <Text style={styles.subSectionHeader}>Current Configuration</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.appearance')}</Text>
       <View style={styles.cardDark}>
-        {renderInfoRow('Name', 'Alex')}
-        <View style={styles.separator} />
-        {renderInfoRow('Personality', 'Encouragement')}
-        <View style={styles.separator} />
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Orb Color</Text>
+          <Text style={styles.infoLabel}>{t('settings.orbColor')}</Text>
           <View style={[styles.colorDot, { backgroundColor: orbColor }]} />
         </View>
       </View>
@@ -376,39 +315,39 @@ export default function SettingsScreen() {
 
   const renderLegal = () => (
     <View style={styles.subScreenContainer}>
-      <Text style={styles.subSectionHeader}>Legal Documents</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.legalDocuments')}</Text>
       <View style={styles.cardDark}>
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="file-document-outline" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>Privacy Policy</Text>
+          <Text style={styles.actionRowText}>{t('settings.privacyPolicy')}</Text>
         </TouchableOpacity>
         <View style={styles.separator} />
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="file-document-outline" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>Terms of Service</Text>
+          <Text style={styles.actionRowText}>{t('settings.termsOfService')}</Text>
         </TouchableOpacity>
         <View style={styles.separator} />
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="shield-check-outline" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>Data Protection</Text>
+          <Text style={styles.actionRowText}>{t('settings.dataProtection')}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.subSectionHeader}>Compliance</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.compliance')}</Text>
       <View style={styles.cardDark}>
         <View style={styles.actionRow}>
-          <Text style={[styles.toggleLabel, { flex: 1 }]}>GDPR Compliant</Text>
+          <Text style={[styles.toggleLabel, { flex: 1 }]}>{t('settings.gdprCompliant')}</Text>
           <View style={styles.badgeSuccess}>
             <Icon name="check" size={12} color="#166534" style={{ marginRight: 4 }} />
-            <Text style={styles.badgeText}>Yes</Text>
+            <Text style={styles.badgeText}>{t('common.yes')}</Text>
           </View>
         </View>
         <View style={styles.separator} />
         <View style={styles.actionRow}>
-          <Text style={[styles.toggleLabel, { flex: 1 }]}>Portuguese Tax Authority</Text>
+          <Text style={[styles.toggleLabel, { flex: 1 }]}>{t('settings.taxAuthority')}</Text>
           <View style={styles.badgeSuccess}>
             <Icon name="check" size={12} color="#166534" style={{ marginRight: 4 }} />
-            <Text style={styles.badgeText}>Certified</Text>
+            <Text style={styles.badgeText}>{t('settings.certified')}</Text>
           </View>
         </View>
       </View>
@@ -423,36 +362,36 @@ export default function SettingsScreen() {
             <Icon name="message-text-outline" size={24} color={orbColor} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>Message Trego Support</Text>
-            <Text style={styles.cardSubtitle}>Get help from our support team</Text>
+            <Text style={styles.cardTitle}>{t('settings.messageSupport')}</Text>
+            <Text style={styles.cardSubtitle}>{t('settings.messageSupportDesc')}</Text>
           </View>
           <Icon name="chevron-right" size={20} color={S_COLORS.textSecondary} />
         </View>
       </TouchableOpacity>
 
-      <Text style={styles.subSectionHeader}>Help Resources</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.helpResources')}</Text>
       <View style={styles.cardDark}>
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="help-circle-outline" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>Help Center</Text>
+          <Text style={styles.actionRowText}>{t('settings.helpCenter')}</Text>
         </TouchableOpacity>
         <View style={styles.separator} />
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="file-document-outline" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>User Guide</Text>
+          <Text style={styles.actionRowText}>{t('settings.userGuide')}</Text>
         </TouchableOpacity>
         <View style={styles.separator} />
         <TouchableOpacity style={styles.actionRow}>
           <Icon name="information-outline" size={20} color={S_COLORS.textSecondary} style={{ marginRight: 10 }} />
-          <Text style={styles.actionRowText}>What's New</Text>
+          <Text style={styles.actionRowText}>{t('settings.whatsNew')}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.subSectionHeader}>About</Text>
+      <Text style={styles.subSectionHeader}>{t('settings.about')}</Text>
       <View style={styles.cardDark}>
-        {renderInfoRow('Version', '1.0.0')}
+        {renderInfoRow(t('settings.version'), '1.0.0-mvp')}
         <View style={styles.separator} />
-        {renderInfoRow('Build', '2025.01.14')}
+        {renderInfoRow(t('settings.build'), '2026.04.09')}
       </View>
     </View>
   );
@@ -460,7 +399,6 @@ export default function SettingsScreen() {
   const renderContent = () => {
     switch (currentSection) {
       case 'app': return renderAppSettings();
-      case 'billing': return renderBillingSettings();
       case 'privacy': return renderPrivacySecurity();
       case 'assistant': return renderAssistantSettings();
       case 'legal': return renderLegal();
@@ -469,7 +407,7 @@ export default function SettingsScreen() {
       default:
         return (
           <>
-            {/* Complete Your Profile Card */}
+            {/* Complete Your Profile Card — real data */}
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => navigation.navigate('ProfileCompletion' as any)}
@@ -481,115 +419,39 @@ export default function SettingsScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={styles.cardHeaderRow}>
-                      <Text style={styles.cardTitle}>Complete Your Profile</Text>
+                      <Text style={styles.cardTitle}>
+                        {[profile?.name, profile?.last_name].filter(Boolean).join(' ') || t('settings.completeProfile')}
+                      </Text>
                       <Text style={styles.percentText}>{completionPercent}%</Text>
                       <Icon name="chevron-right" size={16} color={S_COLORS.textSecondary} />
                     </View>
-                    <Text style={styles.cardSubtitle}>{completionPercent}/100 completed</Text>
+                    <Text style={styles.cardSubtitle}>
+                      {profile?.trade || t('settings.tapToComplete')}
+                    </Text>
                   </View>
                 </View>
-                {/* Progress Bars */}
                 <View style={styles.progressContainer}>
-                  {[1, 2, 3, 4, 5, 6].map((step, idx) => (
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((_, idx) => (
                     <View key={idx} style={[
                       styles.progressSegment,
-                      { backgroundColor: idx < 3 ? orbColor : '#334155' } // Demo progress
+                      { backgroundColor: idx < Math.round(completionPercent / 12.5) ? orbColor : '#334155' }
                     ]} />
                   ))}
                 </View>
               </View>
             </TouchableOpacity>
 
-            {/* Get Certified Card */}
-            <TouchableOpacity style={styles.cardGreen} onPress={() => { /* Navigate to Certification */ }}>
-              <View style={styles.cardRow}>
-                <View style={styles.certificateIcon}>
-                  <Icon name="medal-outline" size={18} color={S_COLORS.accentGreenText} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={[styles.cardTitle, { color: S_COLORS.accentGreenText }]}>Get Certified</Text>
-                    <Icon name="chevron-right" size={16} color={S_COLORS.accentGreenText} />
-                  </View>
-                  <Text style={[styles.cardSubtitle, { color: S_COLORS.accentGreenText }]}>Verify your identity & build trust with clients</Text>
-                  <View style={styles.boostRow}>
-                    <View style={styles.boostBars}>
-                      <View style={[styles.boostBar, { height: 4 }]} />
-                      <View style={[styles.boostBar, { height: 6 }]} />
-                      <View style={[styles.boostBar, { height: 8 }]} />
-                      <View style={[styles.boostBar, { height: 5 }]} />
-                    </View>
-                    <Text style={[styles.boostText, { color: S_COLORS.accentGreenText }]}>Boost your profile</Text>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Dashboard Card */}
-            <TouchableOpacity style={styles.cardDark}>
-              <View style={styles.cardRow}>
-                <View style={[styles.orbIcon, { backgroundColor: '#3b82f6', opacity: 0.2 }]}>
-                  <Icon name="view-dashboard-outline" size={16} color="#3b82f6" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={styles.cardTitle}>Dashboard</Text>
-                    <Icon name="chevron-right" size={16} color={S_COLORS.textSecondary} />
-                  </View>
-                  <Text style={styles.cardSubtitle}>Performance summary and reviews</Text>
-                  <View style={styles.ratingRow}>
-                    <Icon name="star" size={12} color="#facc15" />
-                    <Icon name="star" size={12} color="#facc15" />
-                    <Icon name="star" size={12} color="#facc15" />
-                    <Icon name="star" size={12} color="#facc15" />
-                    <Icon name="star" size={12} color="#facc15" />
-                    <Text style={styles.ratingText}>(147 reviews)</Text>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Invoicing Card */}
-            <TouchableOpacity style={styles.cardLight} onPress={() => { /* Navigate to Invoicing */ }}>
-              <View style={styles.cardRow}>
-                <View style={[styles.orbIcon, { backgroundColor: '#e0f2fe' }]}>
-                  <Icon name="file-document-outline" size={16} color="#0284c7" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.cardTitle, { color: '#0f172a' }]}>Invoicing</Text>
-                  <Text style={[styles.cardSubtitle, { color: '#64748b' }]}>Manage invoices, expenses, and certified invoicing</Text>
-                </View>
-              </View>
-
-              <View style={styles.invoicingSetupCard}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={styles.invoicingTitle}>Invoicing Setup</Text>
-                  <Icon name="chevron-right" size={16} color="#fff" style={{ opacity: 0.5 }} />
-                </View>
-                <Text style={styles.invoicingSubtitle}>2/6 steps completed</Text>
-                <View style={styles.progressContainer}>
-                  {[1, 2, 3, 4, 5, 6].map((step, idx) => (
-                    <View key={idx} style={[
-                      styles.progressSegment,
-                      { backgroundColor: idx < 2 ? '#fff' : '#334155' }
-                    ]} />
-                  ))}
-                </View>
-              </View>
-
-              <Text style={styles.helperText}>Set up certified invoicing to issue compliant invoices.</Text>
-            </TouchableOpacity>
+            {/* Dashboard removed — not in MVP */}
 
             {/* Settings List */}
             <View style={styles.settingsSection}>
-              <Text style={styles.settingsHeader}>Settings</Text>
+              <Text style={styles.settingsHeader}>{t('settings.settings')}</Text>
 
-              {renderSectionItem('cog', 'App Settings', 'Notifications and preferences', () => setCurrentSection('app'))}
-              {renderSectionItem('credit-card', 'Billing Settings', 'App billing, leads, and payments', () => setCurrentSection('billing'))}
-              {renderSectionItem('shield-check', 'Privacy & Security', 'Password, 2FA, and data privacy', () => setCurrentSection('privacy'))}
-              {renderSectionItem('robot', 'Assistant Settings', 'Customize Nova and chat', () => setCurrentSection('assistant'))}
-              {renderSectionItem('scale-balance', 'Legal', 'Privacy policy and terms', () => setCurrentSection('legal'))}
-              {renderSectionItem('help-circle-outline', 'Help', 'Support, guides, and help center', () => setCurrentSection('help'))}
+              {renderSectionItem('cog', t('settings.appSettings'), t('settings.appSettingsDesc'), () => setCurrentSection('app'))}
+              {renderSectionItem('shield-check', t('settings.privacy'), t('settings.privacyDesc'), () => setCurrentSection('privacy'))}
+              {renderSectionItem('robot', t('settings.jobAutomation'), t('settings.jobAutomationDesc'), () => setCurrentSection('assistant'))}
+              {renderSectionItem('scale-balance', t('settings.legal'), t('settings.legalDesc'), () => setCurrentSection('legal'))}
+              {renderSectionItem('help-circle-outline', t('settings.help'), t('settings.helpDesc'), () => setCurrentSection('help'))}
             </View>
 
             {/* Logout */}
@@ -597,12 +459,12 @@ export default function SettingsScreen() {
               style={styles.logoutBtn}
               onPress={() =>
                 Alert.alert(
-                  'Log Out',
-                  'Are you sure you want to log out?',
+                  t('settings.logOut'),
+                  t('settings.logOutConfirm'),
                   [
-                    { text: 'Cancel', style: 'cancel' },
+                    { text: t('common.cancel'), style: 'cancel' },
                     {
-                      text: 'Log Out',
+                      text: t('settings.logOut'),
                       style: 'destructive',
                       onPress: async () => {
                         await jsonStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
@@ -616,11 +478,11 @@ export default function SettingsScreen() {
                 )
               }>
               <Icon name="logout-variant" size={20} color={S_COLORS.danger} />
-              <Text style={styles.logoutText}>Log Out</Text>
+              <Text style={styles.logoutText}>{t('settings.logOut')}</Text>
             </TouchableOpacity>
 
-            <Text style={styles.versionText}>Trego Provider App v1.3.0</Text>
-            <Text style={styles.copyrightText}>© 2026 Trego. All rights reserved.</Text>
+            <Text style={styles.versionText}>{t('settings.appName')}</Text>
+            <Text style={styles.copyrightText}>{t('settings.copyright')}</Text>
             <View style={{ height: 40 }} />
           </>
         );
@@ -629,13 +491,13 @@ export default function SettingsScreen() {
 
   const getTitle = () => {
     switch (currentSection) {
-      case 'app': return 'App Settings';
-      case 'billing': return 'Billing Settings';
-      case 'privacy': return 'Privacy & Security';
-      case 'assistant': return 'Assistant Settings';
-      case 'legal': return 'Legal';
-      case 'help': return 'Help';
-      default: return 'Profile';
+      case 'app': return t('settings.appSettings');
+      // billing removed
+      case 'privacy': return t('settings.privacy');
+      case 'assistant': return t('settings.jobAutomation');
+      case 'legal': return t('settings.legal');
+      case 'help': return t('settings.help');
+      default: return t('settings.title');
     }
   }
 
@@ -992,6 +854,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#166534',
+  },
+  badgeDanger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fecaca',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  badgeTextDanger: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#991b1b',
   },
   outlineButton: {
     flexDirection: 'row',

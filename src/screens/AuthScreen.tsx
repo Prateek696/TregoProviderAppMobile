@@ -5,6 +5,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import LanguageToggle from '../components/LanguageToggle';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {
   View,
@@ -52,6 +54,7 @@ type AuthStep = 'method' | 'email-password' | 'email-otp' | 'phone' | 'verify-ot
 const { width } = Dimensions.get('window');
 
 export default function AuthScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<AuthScreenNavigationProp>();
   const [authStep, setAuthStep] = useState<AuthStep>('method');
   const [email, setEmail] = useState('');
@@ -147,7 +150,7 @@ export default function AuthScreen() {
       const onboardingComplete = await jsonStorage.getItem<boolean>(STORAGE_KEYS.ONBOARDING_COMPLETE);
       navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
     } catch (err) {
-      setError('Failed to sign in with Google. Please try again.');
+      setError(t('auth.errGoogleFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -155,11 +158,11 @@ export default function AuthScreen() {
 
   const handleEmailPasswordSubmit = async () => {
     if (!email || !password) {
-      setError('Please enter both email and password');
+      setError(t('auth.errBothFields'));
       return;
     }
     if (isSignUp && password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError(t('auth.errPasswordShort'));
       return;
     }
 
@@ -177,7 +180,7 @@ export default function AuthScreen() {
         navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
       }
     } catch (err) {
-      setError(isSignUp ? 'Failed to create account' : 'Invalid email or password');
+      setError(isSignUp ? t('auth.errCreateFailed') : t('auth.errInvalidCreds'));
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +188,7 @@ export default function AuthScreen() {
 
   const handleEmailOTPSubmit = async () => {
     if (!email) {
-      setError('Please enter your email');
+      setError(t('auth.errEnterEmail'));
       return;
     }
     setIsLoading(true);
@@ -194,7 +197,7 @@ export default function AuthScreen() {
       await new Promise<void>(resolve => setTimeout(resolve, 1000));
       setAuthStep('verify-otp');
     } catch (err) {
-      setError('Failed to send verification code');
+      setError(t('auth.errSendCode'));
     } finally {
       setIsLoading(false);
     }
@@ -202,7 +205,7 @@ export default function AuthScreen() {
 
   const handlePhoneSubmit = async () => {
     if (!phone) {
-      setError('Please enter your phone number');
+      setError(t('auth.errEnterPhone'));
       return;
     }
     setIsLoading(true);
@@ -216,7 +219,7 @@ export default function AuthScreen() {
       firebaseConfirmRef.current = confirmation;
       setAuthStep('verify-phone-otp');
     } catch (err: any) {
-      setError(err.message || 'Failed to send OTP');
+      setError(err.message || t('auth.errSendOtp'));
     } finally {
       setIsLoading(false);
     }
@@ -224,7 +227,7 @@ export default function AuthScreen() {
 
   const handleVerifyOTP = async () => {
     if (otp.length !== 6) {
-      setError('Please enter the 6-digit code');
+      setError(t('auth.errEnterCode'));
       return;
     }
     setIsLoading(true);
@@ -254,7 +257,7 @@ export default function AuthScreen() {
         navigation.replace(onboardingComplete ? 'Main' : 'Onboarding');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid verification code');
+      setError(err.message || t('auth.errInvalidVerification'));
     } finally {
       setIsLoading(false);
     }
@@ -270,52 +273,26 @@ export default function AuthScreen() {
 
   const renderMethodSelection = () => (
     <View style={styles.methodContainer}>
+      {/* Language toggle — top right */}
+      <View style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+        <LanguageToggle />
+      </View>
+
       <Animated.View style={[styles.logoWrapper, logoAnimatedStyle]}>
         <TregoLogo size="large" animated breathing />
       </Animated.View>
       <Animated.View style={contentAnimatedStyle}>
-        <Text style={styles.welcomeTitle}>Welcome to trego</Text>
-        <Text style={styles.welcomeSubtitle}>Sign in or create your provider account</Text>
+        <Text style={styles.welcomeTitle}>{t('auth.welcome')}</Text>
+        <Text style={styles.welcomeSubtitle}>{t('auth.subtitle')}</Text>
       </Animated.View>
 
       <Animated.View style={[styles.buttonGroup, contentAnimatedStyle]}>
         <AnimatedButton
           style={[styles.authButton, styles.googleButton]}
-          onPress={handleGoogleSignIn}
+          onPress={() => setAuthStep('phone')}
           disabled={isLoading}>
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#f3f4f6" style={styles.spinner} />
-          ) : (
-            <GoogleIcon />
-          )}
-          <Text style={styles.buttonText}>Continue with Google</Text>
-        </AnimatedButton>
-
-        <View style={styles.separatorContainer}>
-          <View style={styles.separatorLine} />
-          <Text style={styles.separatorText}>or</Text>
-          <View style={styles.separatorLine} />
-        </View>
-
-        <AnimatedButton
-          style={[styles.authButton, styles.outlineButton]}
-          onPress={() => setAuthStep('email-password')}>
-          <Icon name="email-outline" size={20} color="#f3f4f6" style={styles.buttonIcon} />
-          <Text style={styles.buttonText}>Continue with Email & Password</Text>
-        </AnimatedButton>
-
-        <AnimatedButton
-          style={[styles.authButton, styles.outlineButton]}
-          onPress={() => setAuthStep('email-otp')}>
-          <Icon name="email-outline" size={20} color="#f3f4f6" style={styles.buttonIcon} />
-          <Text style={styles.buttonText}>Continue with Email (OTP)</Text>
-        </AnimatedButton>
-
-        <AnimatedButton
-          style={[styles.authButton, styles.outlineButton]}
-          onPress={() => setAuthStep('phone')}>
           <Icon name="cellphone" size={20} color="#f3f4f6" style={styles.buttonIcon} />
-          <Text style={styles.buttonText}>Continue with Phone Number</Text>
+          <Text style={styles.buttonText}>{t('auth.continuePhone')}</Text>
         </AnimatedButton>
       </Animated.View>
     </View>
@@ -325,19 +302,19 @@ export default function AuthScreen() {
     <View style={styles.formContainer}>
       <TouchableOpacity style={styles.backButton} onPress={() => setAuthStep('method')}>
         <Icon name="chevron-left" size={24} color="#9ca3af" />
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>{t('common.back')}</Text>
       </TouchableOpacity>
 
-      <Text style={styles.formTitle}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
+      <Text style={styles.formTitle}>{isSignUp ? t('auth.createAccount') : t('auth.signIn')}</Text>
       <Text style={styles.formSubtitle}>
-        {isSignUp ? 'Enter your email and create a password' : 'Enter your credentials to continue'}
+        {isSignUp ? t('auth.createSubtitle') : t('auth.signInSubtitle')}
       </Text>
 
       <View style={styles.form}>
         <View style={styles.inputGroup}>
-          <Label>Email</Label>
+          <Label>{t('auth.email')}</Label>
           <Input
-            placeholder="your@email.com"
+            placeholder={t('auth.emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -347,15 +324,15 @@ export default function AuthScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Label>Password</Label>
+          <Label>{t('auth.password')}</Label>
           <Input
-            placeholder="••••••••"
+            placeholder={t('auth.passwordPlaceholder')}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
             autoCapitalize="none"
           />
-          {isSignUp && <Text style={styles.hintText}>Minimum 8 characters</Text>}
+          {isSignUp && <Text style={styles.hintText}>{t('auth.minChars')}</Text>}
         </View>
 
         {error ? (
@@ -372,12 +349,12 @@ export default function AuthScreen() {
           {isLoading ? (
             <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
           ) : null}
-          <Text style={styles.submitButtonText}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
+          <Text style={styles.submitButtonText}>{isSignUp ? t('auth.createAccount') : t('auth.signIn')}</Text>
         </AnimatedButton>
 
         <TouchableOpacity style={styles.switchAuth} onPress={() => setIsSignUp(!isSignUp)}>
           <Text style={styles.switchAuthText}>
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+            {isSignUp ? t('auth.haveAccount') : t('auth.noAccount')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -388,17 +365,17 @@ export default function AuthScreen() {
     <View style={styles.formContainer}>
       <TouchableOpacity style={styles.backButton} onPress={() => setAuthStep('method')}>
         <Icon name="chevron-left" size={24} color="#9ca3af" />
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>{t('common.back')}</Text>
       </TouchableOpacity>
 
-      <Text style={styles.formTitle}>Sign in with Email</Text>
-      <Text style={styles.formSubtitle}>We'll send you a one-time code</Text>
+      <Text style={styles.formTitle}>{t('auth.signInWithEmail')}</Text>
+      <Text style={styles.formSubtitle}>{t('auth.oneTimeCode')}</Text>
 
       <View style={styles.form}>
         <View style={styles.inputGroup}>
-          <Label>Email</Label>
+          <Label>{t('auth.email')}</Label>
           <Input
-            placeholder="your@email.com"
+            placeholder={t('auth.emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -421,7 +398,7 @@ export default function AuthScreen() {
           {isLoading ? (
             <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
           ) : null}
-          <Text style={styles.submitButtonText}>Send Verification Code</Text>
+          <Text style={styles.submitButtonText}>{t('auth.sendOtp')}</Text>
         </AnimatedButton>
       </View>
     </View>
@@ -429,31 +406,34 @@ export default function AuthScreen() {
 
   const renderPhone = () => (
     <View style={styles.formContainer}>
+      <View style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+        <LanguageToggle />
+      </View>
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => setAuthStep('method')}>
         <Icon name="chevron-left" size={24} color="#9ca3af" />
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>{t('common.back')}</Text>
       </TouchableOpacity>
 
       <View style={styles.iconCircle}>
         <Icon name="cellphone" size={32} color="#ffffff" />
       </View>
-      <Text style={styles.formTitle}>Add Phone Number</Text>
+      <Text style={styles.formTitle}>{t('auth.phoneLabel')}</Text>
       <Text style={styles.formSubtitle}>
-        We'll send you a verification code
+        {t('auth.phoneSubtitle')}
       </Text>
 
       <View style={styles.form}>
         <View style={styles.inputGroup}>
-          <Label>Phone Number</Label>
+          <Label>{t('auth.phoneNumberLabel')}</Label>
           <View style={styles.phoneRow}>
             <CountryPicker
               selected={selectedCountry}
               onSelect={c => { setSelectedCountry(c); setPhone(''); }}
             />
             <Input
-              placeholder="912 345 678"
+              placeholder={t('auth.phonePlaceholderLocal')}
               value={phone}
               onChangeText={text => setPhone(text.replace(/[^\d\s\-]/g, ''))}
               keyboardType="phone-pad"
@@ -480,7 +460,7 @@ export default function AuthScreen() {
           {isLoading ? (
             <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
           ) : null}
-          <Text style={styles.submitButtonText}>Send Verification Code</Text>
+          <Text style={styles.submitButtonText}>{t('auth.sendOtp')}</Text>
         </AnimatedButton>
       </View>
     </View>
@@ -488,6 +468,9 @@ export default function AuthScreen() {
 
   const renderVerifyOTP = () => (
     <View style={styles.formContainer}>
+      <View style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+        <LanguageToggle />
+      </View>
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => {
@@ -495,19 +478,19 @@ export default function AuthScreen() {
           setOtp('');
         }}>
         <Icon name="chevron-left" size={24} color="#9ca3af" />
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>{t('common.back')}</Text>
       </TouchableOpacity>
 
       <View style={styles.iconCircle}>
         <Icon name={authStep === 'verify-phone-otp' ? "cellphone" : "email-outline"} size={32} color="#ffffff" />
       </View>
-      <Text style={styles.formTitle}>Verify Your {authStep === 'verify-phone-otp' ? 'Phone' : 'Email'}</Text>
-      <Text style={styles.formSubtitle}>Enter the 6-digit code sent to</Text>
+      <Text style={styles.formTitle}>{authStep === 'verify-phone-otp' ? t('auth.verifyPhoneTitle') : t('auth.verifyEmail')}</Text>
+      <Text style={styles.formSubtitle}>{t('auth.enterCode')}</Text>
       <Text style={styles.verifyValue}>{email || phone}</Text>
 
       <View style={styles.form}>
         <View style={styles.inputGroup}>
-          <Label style={styles.otpLabel}>Verification Code</Label>
+          <Label style={styles.otpLabel}>{t('auth.verificationCode')}</Label>
           <Input
             value={otp}
             onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, '').slice(0, 6))}
@@ -535,14 +518,14 @@ export default function AuthScreen() {
           ) : (
             <Icon name="check" size={20} color="#ffffff" style={styles.buttonIcon} />
           )}
-          <Text style={styles.submitButtonText}>Verify Code</Text>
+          <Text style={styles.submitButtonText}>{t('auth.verifyCodeBtn')}</Text>
         </AnimatedButton>
 
         <TouchableOpacity
           style={styles.resendButton}
           onPress={authStep === 'verify-phone-otp' ? handlePhoneSubmit : handleEmailOTPSubmit}
           disabled={isLoading}>
-          <Text style={styles.resendText}>Didn't receive a code? Resend</Text>
+          <Text style={styles.resendText}>{t('auth.resend')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -618,9 +601,9 @@ export default function AuthScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          By continuing, you agree to trego's{' '}
-          <Text style={styles.footerLink}>Terms of Service</Text> and{' '}
-          <Text style={styles.footerLink}>Privacy Policy</Text>
+          {t('auth.termsAgreement')}{' '}
+          <Text style={styles.footerLink}>{t('auth.termsOfService')}</Text> {t('auth.and')}{' '}
+          <Text style={styles.footerLink}>{t('auth.privacyPolicy')}</Text>
         </Text>
       </View>
     </KeyboardAvoidingView>

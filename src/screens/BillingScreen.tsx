@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import BillingWelcomeScreen from '../components/billing/BillingWelcomeScreen';
 import BillingOnboardingFlow from '../components/billing/BillingOnboardingFlow';
 import BillingDashboard from '../components/billing/BillingDashboard';
@@ -27,6 +28,7 @@ type BillingView =
   | 'document-type-drawer';
 
 export default function BillingScreen() {
+  const { t } = useTranslation();
   const [currentView, setCurrentView] = useState<BillingView>('home');
   const [viewData, setViewData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -99,9 +101,9 @@ export default function BillingScreen() {
   // Placeholder handlers for not-yet-implemented features
   const handlePlaceholder = (feature: string) => {
     Alert.alert(
-      'Coming Soon',
-      `${feature} will be available in a future update.`,
-      [{ text: 'OK' }]
+      t('billing.comingSoon'),
+      t('billing.comingSoonMessage', { feature }),
+      [{ text: t('common.ok') }]
     );
     // Don't reset view, just stay where we are
   };

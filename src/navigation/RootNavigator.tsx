@@ -2,10 +2,10 @@
  * Root Navigator - Handles Auth, Onboarding, and Main app flow
  */
 
-import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useState, useEffect, useRef } from 'react';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, DeviceEventEmitter } from 'react-native';
 import { RootStackParamList } from './types';
 import IntroScreen from '../screens/IntroScreen';
 import AuthScreen from '../screens/AuthScreen';
@@ -18,6 +18,15 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootNavigator() {
   const [isLoading, setIsLoading] = useState(true);
   const [initialRoute, setInitialRoute] = useState<keyof RootStackParamList>('Intro');
+  const navRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+
+  // Listen for force-logout (401 from API interceptor)
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('TregoForceLogout', () => {
+      navRef.current?.reset({ index: 0, routes: [{ name: 'Auth' }] });
+    });
+    return () => sub.remove();
+  }, []);
 
   // Check authentication status on app startup
   useEffect(() => {
@@ -73,6 +82,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer
+      ref={navRef}
       onReady={() => {
         console.log('[RootNavigator] Navigation container ready');
       }}

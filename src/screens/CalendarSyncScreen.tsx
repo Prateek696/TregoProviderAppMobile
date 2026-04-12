@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { StartupOrb } from '../components/StartupOrb';
 import { Button } from '../components/ui/Button';
+import { useTranslation } from 'react-i18next';
 import {
   GoogleSignin,
   statusCodes,
@@ -39,6 +40,7 @@ export default function CalendarSyncScreen({
   onBack,
   onContinue,
 }: CalendarSyncScreenProps) {
+  const { t } = useTranslation();
   const [selectedOption, setSelectedOption] = useState<CalendarOption>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -133,39 +135,39 @@ export default function CalendarSyncScreen({
   const CALENDAR_OPTIONS = [
     {
       key: 'google' as CalendarOption,
-      label: 'Connect Google Calendar',
-      subtitle: 'Most popular choice',
+      label: t('calendarSync.googleConnect'),
+      subtitle: t('calendarSync.googleSubtitle'),
       icon: <Text style={styles.googleIconText}>G</Text>,
       iconStyle: styles.googleIcon,
     },
     {
       key: 'outlook' as CalendarOption,
-      label: 'Connect Microsoft Outlook',
-      subtitle: 'Office 365 & Exchange — coming soon',
+      label: t('calendarSync.outlookConnect'),
+      subtitle: t('calendarSync.outlookSubtitle'),
       icon: <Text style={styles.outlookIconText}>M</Text>,
       iconStyle: styles.outlookIcon,
       disabled: true,
     },
     {
       key: 'apple' as CalendarOption,
-      label: 'Connect Apple Calendar',
-      subtitle: 'iOS only — not available on Android',
+      label: t('calendarSync.appleConnect'),
+      subtitle: t('calendarSync.appleSubtitle'),
       icon: <Text style={styles.appleIconText}>🍎</Text>,
       iconStyle: styles.appleIcon,
       disabled: true,
     },
     {
       key: 'other' as CalendarOption,
-      label: 'Other Calendar',
-      subtitle: 'Yahoo, Exchange, CalDAV — coming soon',
+      label: t('calendarSync.otherCalendar'),
+      subtitle: t('calendarSync.otherSubtitle'),
       icon: <Text style={styles.otherIconText}>📅</Text>,
       iconStyle: styles.otherIcon,
       disabled: true,
     },
     {
       key: 'skip' as CalendarOption,
-      label: "I don't want to setup my calendar for now",
-      subtitle: 'You can always connect later in settings',
+      label: t('calendarSync.skipLabel'),
+      subtitle: t('calendarSync.skipSubtitle'),
       icon: <View style={styles.skipIconDot} />,
       iconStyle: styles.skipIcon,
     },
@@ -185,9 +187,9 @@ export default function CalendarSyncScreen({
         </View>
 
         <View style={styles.header}>
-          <Text style={styles.title}>Want me to organize your schedule?</Text>
+          <Text style={styles.title}>{t('calendarSync.title')}</Text>
           <Text style={styles.subtitle}>
-            Connect your calendar so I can automatically schedule jobs, avoid conflicts, and block time for new bookings.
+            {t('calendarSync.subtitle')}
           </Text>
         </View>
 
@@ -239,10 +241,10 @@ export default function CalendarSyncScreen({
               <View style={styles.previewCheck}>
                 <Text style={styles.previewCheckText}>✓</Text>
               </View>
-              <Text style={styles.previewTitle}>Google Calendar Connected</Text>
+              <Text style={styles.previewTitle}>{t('calendarSync.googleConnected')}</Text>
             </View>
             <Text style={styles.previewDescription}>
-              Your next {events.length} events (next 14 days):
+              {t('calendarSync.nextEvents', { count: events.length })}
             </Text>
             <View style={styles.eventsList}>
               {events.map(ev => (
@@ -257,17 +259,17 @@ export default function CalendarSyncScreen({
 
         {connected && selectedOption === 'google' && events.length === 0 && !isLoading && (
           <View style={styles.previewContainer}>
-            <Text style={styles.previewTitle}>✓ Google Calendar Connected</Text>
+            <Text style={styles.previewTitle}>{t('calendarSync.googleConnectedShort')}</Text>
           </View>
         )}
       </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity onPress={onBack} style={styles.backButtonTouchable}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>{t('calendarSync.back')}</Text>
         </TouchableOpacity>
         <Button
-          title={selectedOption === 'skip' ? 'Complete Setup' : selectedOption ? 'Import & Complete Setup' : 'Continue'}
+          title={selectedOption === 'skip' ? t('calendarSync.completeSetup') : selectedOption ? t('calendarSync.importComplete') : t('calendarSync.continue')}
           onPress={handleContinue}
           disabled={!selectedOption || isLoading}
           style={[styles.continueButton, { backgroundColor: orbColor }]}

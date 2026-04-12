@@ -13,6 +13,8 @@ import { dayStateStorage, jobStatusStorage, freeTimeNotesStorage, FreeTimeNote }
 import { useFocusEffect } from '@react-navigation/native';
 import { jobsAPI } from '../services/api';
 import { mapBackendJob } from '../services/jobActions';
+import LanguageToggle from '../components/LanguageToggle';
+import { ScheduleScreenSkeleton } from '../components/ui/Skeleton';
 
 import DayStatsDropdown from '../components/schedule/DayStatsDropdown';
 import AddJobModal from '../components/schedule/AddJobModal';
@@ -29,6 +31,7 @@ export default function ScheduleScreen() {
   const [addJobModalVisible, setAddJobModalVisible] = useState(false);
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [allJobs, setAllJobs] = useState<any[]>([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false);
 
   // Day state management
   const [isDayStarted, setIsDayStarted] = useState(false);
@@ -52,6 +55,8 @@ export default function ScheduleScreen() {
       setAllJobs(res.data.jobs.map(mapBackendJob));
     } catch (err) {
       console.error('ScheduleScreen: failed to load jobs', err);
+    } finally {
+      setJobsLoaded(true);
     }
   };
 
@@ -154,7 +159,7 @@ export default function ScheduleScreen() {
       const minutes = parseInt(minutesStr, 10);
       if (period === 'PM' && hours !== 12) hours += 12;
       if (period === 'AM' && hours === 12) hours = 0;
-      date.setHours(hours, minutes, 0, 0);
+      date.setUTCHours(hours, minutes, 0, 0);
       await jobsAPI.update(jobId, { scheduled_at: date.toISOString() } as any);
       loadJobs();
     } catch (err) {
@@ -198,9 +203,12 @@ export default function ScheduleScreen() {
     setSelectedJob(fullJob);
   };
 
+  if (!jobsLoaded) return <ScheduleScreenSkeleton />;
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <StatusBar hidden={true} />
+      <View style={{ position: 'absolute', top: 8, right: 12, zIndex: 100 }}><LanguageToggle /></View>
 
       {/* Header */}
       <View style={styles.header}>

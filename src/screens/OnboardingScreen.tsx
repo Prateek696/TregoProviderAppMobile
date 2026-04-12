@@ -31,6 +31,7 @@ import PersonalInformationScreen from './PersonalInformationScreen';
 import BillingInformationScreen from './BillingInformationScreen';
 import CalendarSyncScreen from './CalendarSyncScreen';
 import CompleteSetupScreen from './CompleteSetupScreen';
+import { useTranslation } from 'react-i18next';
 
 type OnboardingScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
 
@@ -205,6 +206,7 @@ const SERVICE_DOMAINS: { [key: string]: string[] } = {
 };
 
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<OnboardingScreenNavigationProp>();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(0);
   const [firstName, setFirstName] = useState('');
@@ -489,15 +491,15 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Title */}
-      <Text style={styles.stepTitle}>What would you like to be called?</Text>
+      <Text style={styles.stepTitle}>{t('onboarding.step0Title')}</Text>
 
       {/* Input Section */}
       <View style={styles.nameInputContainer}>
-        <Label style={styles.nameLabel}>Nickname/First Name</Label>
+        <Label style={styles.nameLabel}>{t('onboarding.nicknameLabel')}</Label>
         <View style={styles.inputWrapper}>
           <Icon name="account-outline" size={24} color="#9ca3af" style={styles.userIcon} />
           <Input
-            placeholder="Enter your name…"
+            placeholder={t('onboarding.namePlaceholder')}
             value={firstName}
             onChangeText={setFirstName}
             autoCapitalize="words"
@@ -510,7 +512,7 @@ export default function OnboardingScreen() {
 
       {/* Helper text */}
       <Text style={styles.helperText}>
-        This is just how I'll address you in chat and what clients will see on their end — we'll ask for legal details later for compliance.
+        {t('onboarding.step0Helper')}
       </Text>
     </View>
   );
@@ -535,12 +537,9 @@ export default function OnboardingScreen() {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    const fullMessage = `Hello ${firstName}, nice to meet you. Now it's time to set me up. What would you like to call me?`;
+    const fullMessage = t('onboarding.step1Greeting', { name: firstName });
     const segments = [
-      { text: `Hello ${firstName},`, pauseAfter: 800 },
-      { text: ' nice to meet you.', pauseAfter: 600 },
-      { text: ` Now it's time to set me up.`, pauseAfter: 600 },
-      { text: ' What would you like to call me?', pauseAfter: 0 }
+      { text: fullMessage, pauseAfter: 0 },
     ];
 
     let currentText = '';
@@ -594,7 +593,7 @@ export default function OnboardingScreen() {
 
         {/* Typing message */}
         <Text style={styles.greetingMessage}>
-          {typingMessage || `Hello ${firstName}, nice to meet you. Now it's time to set me up. What would you like to call me?`}
+          {typingMessage || t('onboarding.step1Greeting', { name: firstName })}
           {!typingCompleteRef.current && typingMessage && <Text style={styles.cursor}>|</Text>}
         </Text>
 
@@ -621,10 +620,10 @@ export default function OnboardingScreen() {
 
         {/* Custom name input */}
         <View style={styles.customNameContainer}>
-          <Label style={styles.customNameLabel}>Or type a name you prefer</Label>
+          <Label style={styles.customNameLabel}>{t('onboarding.step1CustomLabel')}</Label>
           <View style={styles.customInputWrapper}>
             <Input
-              placeholder="Custom name"
+              placeholder={t('onboarding.step1CustomPh')}
               value={assistantName}
               onChangeText={setAssistantName}
               autoCapitalize="words"
@@ -637,7 +636,7 @@ export default function OnboardingScreen() {
         {/* Dynamic feedback */}
         {assistantName && assistantName.trim() && (
           <Text style={styles.feedbackText}>
-            Great, I'll go by <Text style={styles.feedbackBold}>{assistantName}</Text>.
+            {t('onboarding.step1Feedback')} <Text style={styles.feedbackBold}>{assistantName}</Text>.
           </Text>
         )}
       </View>
@@ -669,13 +668,13 @@ export default function OnboardingScreen() {
         </View>
 
         {/* Title - Assistant name */}
-        <Text style={styles.assistantNameTitle}>{assistantName || 'Assistant'}</Text>
+        <Text style={styles.assistantNameTitle}>{assistantName || t('onboarding.step2Title')}</Text>
 
         {/* Subtitle */}
-        <Text style={styles.orbSubtitle}>Let's pick how I look.</Text>
+        <Text style={styles.orbSubtitle}>{t('onboarding.step2Subtitle')}</Text>
 
         {/* Hint text */}
-        <Text style={styles.orbHint}>You can change this anytime in Settings.</Text>
+        <Text style={styles.orbHint}>{t('onboarding.step2Hint')}</Text>
 
         {/* Color grid - 4x2 matching web version */}
         <View style={styles.orbAvatarGrid}>
@@ -706,7 +705,7 @@ export default function OnboardingScreen() {
         </View>
 
         {/* Feedback text */}
-        <Text style={styles.orbFeedbackText}>This is me now. Like it?</Text>
+        <Text style={styles.orbFeedbackText}>{t('onboarding.step2Feedback')}</Text>
       </View>
     );
   };
@@ -724,15 +723,15 @@ export default function OnboardingScreen() {
           {selectedCategory && selectedCategory !== '✨ Other'
             ? selectedCategory
             : selectedCategory === '✨ Other'
-              ? 'Describe your service'
-              : 'What kind of services do you provide?'}
+              ? t('onboarding.step3OtherTitle')
+              : t('onboarding.step3Title')}
         </Text>
 
         {/* Instructions */}
         <Text style={styles.servicesInstructions}>
           {selectedCategory
-            ? `Choose up to 3 to start (${selectedServices.length}/3)`
-            : 'Choose up to 3 services to start with.'}
+            ? t('onboarding.step3InstructionWithCount', { n: selectedServices.length })
+            : t('onboarding.step3Instruction')}
         </Text>
 
         {/* Help Section */}
@@ -740,7 +739,7 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             onPress={() => setShowServiceHelp(!showServiceHelp)}
             style={styles.helpButton}>
-            <Text style={styles.helpButtonText}><Icon name="information-outline" size={16} /> I don't know what type of services I provide</Text>
+            <Text style={styles.helpButtonText}><Icon name="information-outline" size={16} /> {t('onboarding.step3DontKnow')}</Text>
           </TouchableOpacity>
         )}
 
@@ -749,7 +748,7 @@ export default function OnboardingScreen() {
           <View style={styles.searchContainer}>
             <Icon name="magnify" size={20} color="#9ca3af" style={styles.searchIcon} />
             <Input
-              placeholder="Search categories..."
+              placeholder={t('onboarding.searchCategories')}
               value={serviceSearchQuery}
               onChangeText={setServiceSearchQuery}
               style={styles.searchInput}
@@ -761,7 +760,7 @@ export default function OnboardingScreen() {
           <View style={styles.searchContainer}>
             <Icon name="magnify" size={20} color="#9ca3af" style={styles.searchIcon} />
             <Input
-              placeholder="Search services..."
+              placeholder={t('onboarding.searchServices')}
               value={serviceSearchQuery}
               onChangeText={setServiceSearchQuery}
               style={styles.searchInput}
@@ -773,7 +772,7 @@ export default function OnboardingScreen() {
         {selectedServices.length > 0 && (
           <View style={styles.selectedServicesContainer}>
             <Text style={styles.selectedServicesLabel}>
-              Selected ({selectedServices.length}/3):
+              {t('onboarding.selectedCount', { n: selectedServices.length })}
             </Text>
             <View style={styles.selectedServicesChips}>
               {selectedServices.map((service) => (
@@ -798,7 +797,7 @@ export default function OnboardingScreen() {
               setServiceSearchQuery('');
             }}
             style={styles.backToCategoriesButton}>
-            <Text style={styles.backToCategoriesText}><Icon name="arrow-left" size={16} /> Back to categories</Text>
+            <Text style={styles.backToCategoriesText}><Icon name="arrow-left" size={16} /> {t('onboarding.backToCategories')}</Text>
           </TouchableOpacity>
         )}
 
@@ -852,8 +851,8 @@ export default function OnboardingScreen() {
             ) : (
               <Text style={styles.noResultsText}>
                 {serviceSearchQuery.trim()
-                  ? 'No results found. Try a different search term.'
-                  : 'No services available.'}
+                  ? t('onboarding.noResults')
+                  : t('onboarding.noServices')}
               </Text>
             )}
           </View>
@@ -862,10 +861,10 @@ export default function OnboardingScreen() {
         {/* Custom service input for "Other" */}
         {selectedCategory === '✨ Other' && (
           <View style={styles.customServiceContainer}>
-            <Text style={styles.customServiceLabel}>Type your custom service below:</Text>
+            <Text style={styles.customServiceLabel}>{t('onboarding.customServiceLabel')}</Text>
             <View style={styles.customServiceInputRow}>
               <Input
-                placeholder="e.g., Mobile Car Detailing..."
+                placeholder={t('onboarding.customServicePh')}
                 value={customServiceInput}
                 onChangeText={setCustomServiceInput}
                 style={styles.customServiceInput}
@@ -880,7 +879,7 @@ export default function OnboardingScreen() {
                 <TouchableOpacity
                   onPress={() => addCustomService(customServiceInput.trim())}
                   style={styles.addServiceButton}>
-                  <Text style={styles.addServiceButtonText}>Add</Text>
+                  <Text style={styles.addServiceButtonText}>{t('onboarding.addBtn')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -895,7 +894,7 @@ export default function OnboardingScreen() {
             <View style={[styles.learnMoreIcon, { backgroundColor: `${orbColor}4D` }]}>
               <Icon name="sparkles" size={16} color={orbColor} />
             </View>
-            <Text style={[styles.learnMoreText, { color: orbColor }]}>Learn more about this</Text>
+            <Text style={[styles.learnMoreText, { color: orbColor }]}>{t('onboarding.learnMore')}</Text>
             <Icon
               name={showEnhancedCustomization ? "chevron-down" : "chevron-right"}
               size={20}
@@ -965,9 +964,9 @@ export default function OnboardingScreen() {
         </View>
 
         {/* Title */}
-        <Text style={styles.servicesTitle}>Where's your base and how far do you travel?</Text>
+        <Text style={styles.servicesTitle}>{t('onboarding.step4Title')}</Text>
         <Text style={styles.servicesInstructions}>
-          Your base and coverage radius help us match you with the right jobs.
+          {t('onboarding.step4Subtitle')}
         </Text>
 
         <ScrollView
@@ -977,7 +976,7 @@ export default function OnboardingScreen() {
 
           {/* Base Address Section */}
           <View style={styles.baseSection}>
-            <Label style={styles.sectionLabel}>Base Address</Label>
+            <Label style={styles.sectionLabel}>{t('onboarding.baseAddress')}</Label>
 
             {/* Existing base location */}
             {baseLocations.length > 0 && (
@@ -1005,7 +1004,7 @@ export default function OnboardingScreen() {
             {baseLocations.length === 0 && (
               <View style={styles.addBaseForm}>
                 <Input
-                  placeholder="Nickname (e.g., Main Office)"
+                  placeholder={t('onboarding.nicknamePh')}
                   value={newBaseNickname}
                   onChangeText={setNewBaseNickname}
                   style={styles.baseInput}
@@ -1015,7 +1014,7 @@ export default function OnboardingScreen() {
                   <View style={styles.addressInputWrapper}>
                     <Icon name="map-marker" size={18} color="#9ca3af" style={styles.mapPinIcon} />
                     <Input
-                      placeholder="Street address"
+                      placeholder={t('onboarding.streetAddressPh')}
                       value={newBaseLocation}
                       onChangeText={setNewBaseLocation}
                       style={[styles.baseInput, styles.addressInput]}
@@ -1028,13 +1027,13 @@ export default function OnboardingScreen() {
 
                 <View style={styles.zipCityRow}>
                   <Input
-                    placeholder="ZIP Code"
+                    placeholder={t('onboarding.zipCodePh')}
                     value={newBaseZipCode}
                     onChangeText={setNewBaseZipCode}
                     style={[styles.baseInput, styles.halfWidth]}
                   />
                   <Input
-                    placeholder="City"
+                    placeholder={t('onboarding.cityPh')}
                     value={newBaseCity}
                     onChangeText={setNewBaseCity}
                     style={[styles.baseInput, styles.halfWidth]}
@@ -1496,13 +1495,13 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 onPress={handleBack}
                 style={styles.backButtonTouchable}>
-                <Text style={styles.backButtonText}>← Back</Text>
+                <Text style={styles.backButtonText}>← {t('onboarding.back')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.backButtonTouchable} /> // Spacer when no back button
             )}
             <Button
-              title={(currentStep as number) === 0 ? 'Continue' : (currentStep as number) === 9 ? 'Complete Setup' : 'Continue'}
+              title={(currentStep as number) === 9 ? t('calendarSync.completeSetup') : t('onboarding.next')}
               onPress={handleNext}
               disabled={!canProceed()}
               style={[styles.nextButton, currentStep === 0 && styles.nextButtonFullWidth]}

@@ -240,20 +240,66 @@ function WakeBlock({ block, isDayStarted, onStartDay }: { block: ScheduleBlock; 
     );
 }
 
-function BreakBlockItem({ block }: { block: ScheduleBlock }) {
+function BreakBlockItem({ block, onBreakReschedule, onScrollEnable }: {
+    block: ScheduleBlock;
+    onBreakReschedule?: (newTime: string) => void;
+    onScrollEnable?: (v: boolean) => void;
+}) {
     const top    = minutesToTop(timeToMinutes(block.time));
     const height = durationToHeight(block.duration);
+    const dragY    = useSharedValue(0);
+    const isActive = useSharedValue(false);
+    const [liveTime, setLiveTime] = useState<string | null>(null);
+
+    const updateLiveTime = (dy: number) => {
+        const delta = Math.round((dy / HOUR_HEIGHT) * 60 / 15) * 15;
+        const orig  = timeToMinutes(block.time);
+        const next  = Math.max(START_HOUR * 60, Math.min((END_HOUR - 1) * 60, orig + delta));
+        setLiveTime(minutesToTime(next));
+    };
+
+    const handleDrop = (dy: number) => {
+        const delta = Math.round((dy / HOUR_HEIGHT) * 60 / 15) * 15;
+        if (delta !== 0 && onBreakReschedule) {
+            const orig = timeToMinutes(block.time);
+            const next = Math.max(START_HOUR * 60, Math.min((END_HOUR - 1) * 60, orig + delta));
+            onBreakReschedule(minutesToTime(next));
+        }
+        setLiveTime(null);
+        onScrollEnable?.(true);
+    };
+
+    const pan = Gesture.Pan()
+        .activateAfterLongPress(400)
+        .onStart(() => { isActive.value = true; runOnJS(onScrollEnable || (() => {}))(false); })
+        .onUpdate(e => { dragY.value = e.translationY; runOnJS(updateLiveTime)(e.translationY); })
+        .onEnd(e => { runOnJS(handleDrop)(e.translationY); dragY.value = withSpring(0, { damping: 20 }); isActive.value = false; })
+        .onFinalize(() => { dragY.value = withSpring(0, { damping: 20 }); isActive.value = false; runOnJS(onScrollEnable || (() => {}))(true); });
+
+    const anim = useAnimatedStyle(() => ({
+        transform: [{ translateY: dragY.value }],
+        zIndex: isActive.value ? 999 : 5,
+        elevation: isActive.value ? 14 : 2,
+    }));
+
+    const endMin = timeToMinutes(block.time) + block.duration;
+    const displayEnd = liveTime
+        ? minutesToTime(timeToMinutes(liveTime) + block.duration)
+        : block.endTime;
+
     return (
-        <View style={[s.blockAbsolute, { top, height }]}>
-            <View style={[s.specialCard, { borderColor: '#1e3a5f', backgroundColor: '#0a1628' }]}>
-                <Icon name="coffee-outline" size={14} color="#3b82f6" />
-                <View style={s.specialText}>
-                    <Text style={[s.specialTitle, { color: '#93c5fd' }]}>{block.title}</Text>
-                    <Text style={s.specialTime}>{block.time} – {block.endTime}</Text>
-                    {block.location ? <Text style={s.specialLocation}>{block.location}</Text> : null}
+        <GestureDetector gesture={pan}>
+            <Animated.View style={[s.blockAbsolute, { top, height }, anim]}>
+                <View style={[s.specialCard, { borderColor: '#1e3a5f', backgroundColor: '#0a1628' }]}>
+                    <Icon name="coffee-outline" size={14} color="#3b82f6" />
+                    <View style={s.specialText}>
+                        <Text style={[s.specialTitle, { color: '#93c5fd' }]}>{block.title}</Text>
+                        <Text style={s.specialTime}>{liveTime || block.time} – {displayEnd}</Text>
+                    </View>
+                    <Icon name="drag-vertical" size={14} color="#1e3a5f" style={{ marginLeft: 'auto' }} />
                 </View>
-            </View>
-        </View>
+            </Animated.View>
+        </GestureDetector>
     );
 }
 
@@ -303,7 +349,14 @@ export default function LinearTimeCalendar({
     jobStatuses, onJobStatusChange, freeTimeNotes, onFreeTimeNoteAdd, onJobReschedule,
 }: LinearTimeCalendarProps) {
     const [scrollEnabled, setScrollEnabled] = useState(true);
+    const [lunchTime, setLunchTime] = useState('12:00 PM');
+    const lunchEndMin = timeToMinutes(lunchTime) + 60;
+    const lunchEndTime = minutesToTime(lunchEndMin);
     const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+
+    const handleLunchReschedule = (newTime: string) => {
+        setLunchTime(newTime);
+    };
 
     // ── Build schedule blocks ─────────────────────────────────────────────────
     const scheduleBlocks = useMemo<ScheduleBlock[]>(() => {
@@ -327,8 +380,8 @@ export default function LinearTimeCalendar({
         if (!hasNoonConflict && selectedDate.getDay() !== 0 && selectedDate.getDay() !== 6) {
             blocks.push({
                 id: 'lunch_break', type: 'break', title: 'Lunch Break',
-                time: '12:00 PM', endTime: '1:00 PM',
-                date: selectedDate.toISOString(), duration: 60, location: 'Campo de Ourique',
+                time: lunchTime, endTime: lunchEndTime,
+                date: selectedDate.toISOString(), duration: 60,
             });
         }
 
@@ -389,7 +442,7 @@ export default function LinearTimeCalendar({
         }
 
         return blocks;
-    }, [selectedDate, jobs]);
+    }, [selectedDate, jobs, lunchTime, lunchEndTime]);
 
     return (
         <ScrollView
@@ -427,7 +480,7 @@ export default function LinearTimeCalendar({
                     return <WakeBlock key={block.id} block={block} isDayStarted={isDayStarted} onStartDay={() => onStartDay(true, new Date())} />;
                 }
                 if (block.type === 'break') {
-                    return <BreakBlockItem key={block.id} block={block} />;
+                    return <BreakBlockItem key={block.id} block={block} onBreakReschedule={handleLunchReschedule} onScrollEnable={setScrollEnabled} />;
                 }
                 if (block.type === 'travel') {
                     return <TravelBlockItem key={block.id} block={block} />;

@@ -26,12 +26,14 @@ import { StartupOrb } from '../components/StartupOrb';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { useTranslation } from 'react-i18next';
 
 type IntroScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Intro'>;
 
 const { width, height } = Dimensions.get('window');
 
 export default function IntroScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<IntroScreenNavigationProp>();
   const [showButton, setShowButton] = useState(false);
   const [orbIntensity, setOrbIntensity] = useState<'normal' | 'strong'>('normal');
@@ -39,13 +41,13 @@ export default function IntroScreen() {
 
   // Cycling taglines
   const cyclingTaglines = [
-    'Work gets lighter from here.',
-    'Your skills, your time, valued here.',
-    'Invoices sent. Payouts on time.',
-    'Only the right jobs, never the noise.',
-    'Know what you will make, before you start.',
-    'Updates and reminders before you need them.',
-    'Protected when plans change.',
+    t('intro.tagline1'),
+    t('intro.tagline2'),
+    t('intro.tagline3'),
+    t('intro.tagline4'),
+    t('intro.tagline5'),
+    t('intro.tagline6'),
+    t('intro.tagline7'),
   ];
 
   // Brand text animation
@@ -258,7 +260,7 @@ export default function IntroScreen() {
 
       {/* Brand text - top center */}
       <Animated.View style={[styles.brandContainer, brandAnimatedStyle]}>
-        <Text style={styles.brandText}>trego</Text>
+        <Text style={styles.brandText}>{t('intro.brand')}</Text>
       </Animated.View>
 
       {/* Orb - center - Always render to prevent animation stopping */}
@@ -276,13 +278,13 @@ export default function IntroScreen() {
         {/* Action words */}
         <View style={styles.actionWordsContainer}>
           <Animated.Text style={[styles.actionWord, jobsAnimatedStyle]}>
-            Jobs.
+            {t('intro.jobs')}
           </Animated.Text>
           <Animated.Text style={[styles.actionWord, scheduleAnimatedStyle]}>
-            Schedule.
+            {t('intro.schedule')}
           </Animated.Text>
           <Animated.Text style={[styles.actionWord, styles.actionWordHandled, handledAnimatedStyle]}>
-            Handled!
+            {t('intro.handled')}
           </Animated.Text>
         </View>
       </View>
@@ -295,7 +297,7 @@ export default function IntroScreen() {
             onPress={handleGetStarted}
             activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>Let's start</Text>
+            <Text style={styles.buttonText}>{t('intro.letsStart')}</Text>
           </TouchableOpacity>
         </Animated.View>
       )}

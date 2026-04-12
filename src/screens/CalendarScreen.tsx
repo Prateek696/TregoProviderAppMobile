@@ -17,7 +17,10 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { jobsAPI } from '../services/api';
 import { mapBackendJob } from '../services/jobActions';
+import { CalendarScreenSkeleton } from '../components/ui/Skeleton';
+import LanguageToggle from '../components/LanguageToggle';
 import { Job } from '../shared/types/job';
+import { useTranslation } from 'react-i18next';
 
 const D = {
   bg: '#0f172a',
@@ -28,9 +31,9 @@ const D = {
   blue: '#3b82f6',
 };
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'];
+const DAY_KEYS = ['sunShort', 'monShort', 'tueShort', 'wedShort', 'thuShort', 'friShort', 'satShort'];
+const MONTH_KEYS = ['januaryLong', 'februaryLong', 'marchLong', 'aprilLong', 'mayLong', 'juneLong',
+  'julyLong', 'augustLong', 'septemberLong', 'octoberLong', 'novemberLong', 'decemberLong'];
 
 function getCalendarDays(year: number, month: number) {
   const firstDay = new Date(year, month, 1).getDay();
@@ -46,7 +49,10 @@ function toDateKey(date: Date) {
 }
 
 export default function CalendarScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const DAYS = DAY_KEYS.map(k => t(`days.${k}` as any));
+  const MONTHS = MONTH_KEYS.map(k => t(`months.${k}` as any));
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -111,11 +117,13 @@ export default function CalendarScreen() {
   const todayKey = toDateKey(today);
   const selectedJobs = jobsByDate[selectedDate] || [];
 
+  if (loading && Object.keys(jobsByDate).length === 0) return <CalendarScreenSkeleton />;
+
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Calendar</Text>
-        {loading && <ActivityIndicator size="small" color={D.blue} />}
+        <Text style={styles.headerTitle}>{t('calendar.title')}</Text>
+        <View style={{ marginLeft: 'auto' }}><LanguageToggle /></View>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -139,7 +147,7 @@ export default function CalendarScreen() {
         <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
           <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
             <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
-              <Text style={styles.pickerHeading}>Select Month & Year</Text>
+              <Text style={styles.pickerHeading}>{t('calendar.selectMonthYear')}</Text>
               <View style={styles.pickerColumns}>
                 {/* Month column */}
                 <FlatList
@@ -171,7 +179,7 @@ export default function CalendarScreen() {
                 />
               </View>
               <TouchableOpacity style={styles.pickerConfirm} onPress={() => { setViewMonth(pickerMonth); setViewYear(pickerYear); setShowPicker(false); }}>
-                <Text style={styles.pickerConfirmText}>Confirm</Text>
+                <Text style={styles.pickerConfirmText}>{t('calendar.confirm')}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -217,12 +225,12 @@ export default function CalendarScreen() {
         {/* Selected day jobs */}
         <View style={styles.daySection}>
           <Text style={styles.daySectionTitle}>
-            {selectedDate === todayKey ? 'Today' : selectedDate} · {selectedJobs.length} job{selectedJobs.length !== 1 ? 's' : ''}
+            {selectedDate === todayKey ? t('calendar.today') : selectedDate} · {t('calendar.jobsCount', { count: selectedJobs.length })}
           </Text>
           {selectedJobs.length === 0 ? (
             <View style={styles.emptyDay}>
               <Icon name="calendar-blank-outline" size={40} color={D.textMuted} />
-              <Text style={styles.emptyDayText}>No jobs scheduled</Text>
+              <Text style={styles.emptyDayText}>{t('calendar.noJobsScheduled')}</Text>
             </View>
           ) : (
             selectedJobs.map(job => (

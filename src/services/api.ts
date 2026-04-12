@@ -7,9 +7,9 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-// Change this to your Render URL when deployed
+// Local backend for testing — phone uses Mac LAN IP (same WiFi required)
 export const API_BASE_URL = __DEV__
-  ? 'http://192.168.1.11:3001' // Mac LAN IP — works for both emulator and physical device on same WiFi
+  ? 'http://192.168.1.12:3001'
   : 'https://tregoproviderappmobile.onrender.com';
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
@@ -28,6 +28,20 @@ client.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Auto-logout on 401 (expired token)
+client.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      await jsonStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      // DeviceEventEmitter will be caught by RootNavigator to reset to Auth
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('TregoForceLogout');
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authAPI = {
   // After Firebase Phone Auth verifies the OTP on device, send the idToken here
@@ -39,12 +53,7 @@ export const authAPI = {
 export const profileAPI = {
   get: () => client.get('/profile'),
 
-  update: (data: {
-    name?: string;
-    trade?: string;
-    nif?: string;
-    fcm_token?: string;
-  }) => client.put('/profile', data),
+  update: (data: Record<string, any>) => client.put('/profile', data),
 };
 
 // ─── Jobs ─────────────────────────────────────────────────────────────────────
@@ -102,7 +111,7 @@ export const jobsAPI = {
     client_id: string;
   }>) => client.put<{ job: any }>(`/jobs/${id}`, data),
 
-  uploadPhoto: (id: string, imagePath: string, phase: 'before' | 'during' | 'after' = 'during', source: 'provider' | 'client' = 'provider') => {
+  uploadPhoto: (id: string, imagePath: string, phase: 'before' | 'during' | 'after' = 'during', source: 'provider' | 'client' = 'provider', latitude?: number, longitude?: number) => {
     const form = new FormData();
     form.append('photo', {
       uri: imagePath,
@@ -111,6 +120,8 @@ export const jobsAPI = {
     } as any);
     form.append('phase', phase);
     form.append('source', source);
+    if (latitude != null) form.append('latitude', String(latitude));
+    if (longitude != null) form.append('longitude', String(longitude));
     return client.post<{ photo: any }>(`/jobs/${id}/photo`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,

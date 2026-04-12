@@ -1,6 +1,8 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -9,6 +11,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
 
     <application
       android:name=".MainApplication"
@@ -19,6 +28,14 @@
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
+
+      <!-- Default notification icon + color for all notifications (FCM, local, etc.) -->
+      <meta-data android:name="com.google.firebase.messaging.default_notification_icon"
+                 android:resource="@drawable/ic_notif_trego"
+                 tools:replace="android:resource" />
+      <meta-data android:name="com.google.firebase.messaging.default_notification_color"
+                 android:resource="@color/notification_color"
+                 tools:replace="android:resource" />
 
       <activity
         android:name=".MainActivity"
@@ -33,32 +50,68 @@
         </intent-filter>
       </activity>
 
+      <!-- Floating text-input dialog for the notification Text button (no app open needed) -->
+      <activity
+          android:name=".TregoTextInputActivity"
+          android:exported="false"
+          android:theme="@android:style/Theme.Translucent.NoTitleBar"
+          android:windowSoftInputMode="stateVisible|adjustResize"
+          android:taskAffinity=""
+          android:excludeFromRecents="true" />
+
+      <!-- Transparent activity for all notification action buttons (getActivity always works on all OEMs) -->
+      <activity
+          android:name=".TregoNotifActionActivity"
+          android:exported="false"
+          android:theme="@android:style/Theme.Translucent.NoTitleBar"
+          android:taskAffinity=""
+          android:excludeFromRecents="true"
+          android:noHistory="true" />
+
+      <!-- Persistent job capture notification — owns all states (normal/recording/review) -->
+      <service
+          android:name=".TregoPersistentService"
+          android:exported="false"
+          android:foregroundServiceType="dataSync|microphone" />
+
       <!-- Floating bubble foreground service -->
       <service
           android:name=".TregoBubbleService"
           android:exported="false"
-          android:foregroundServiceType="specialUse" />
+          android:foregroundServiceType="dataSync|microphone" />
 
-      <!-- Background voice recording service (notification bar) -->
+      <!-- Legacy recording service (kept for compatibility) -->
       <service
           android:name=".TregoRecordingService"
           android:exported="false"
           android:foregroundServiceType="microphone" />
 
-      <!-- Persistent job capture shortcut notification -->
-      <service
-          android:name=".TregoPersistentService"
+      <!-- FileProvider for react-native-image-picker camera output -->
+      <provider
+          android:name="androidx.core.content.FileProvider"
+          android:authorities="${applicationId}.fileprovider"
           android:exported="false"
-          android:foregroundServiceType="dataSync" />
+          android:grantUriPermissions="true">
+          <meta-data
+              android:name="android.support.FILE_PROVIDER_PATHS"
+              android:resource="@xml/file_provider_paths" />
+      </provider>
 
-      <!-- Notification action receiver (voice + text without opening app) -->
+      <!-- Notification action receiver -->
       <receiver
           android:name=".TregoActionReceiver"
           android:exported="false">
           <intent-filter>
               <action android:name="com.tregoproviderapp.ACTION_RECORD_VOICE" />
               <action android:name="com.tregoproviderapp.ACTION_RECORD_TEXT" />
-              <action android:name="com.tregoproviderapp.ACTION_STOP_RECORDING" />
+              <action android:name="com.tregoproviderapp.ACTION_SHOW_TEXT_MODE" />
+              <action android:name="com.tregoproviderapp.ACTION_SUBMIT_TEXT" />
+              <action android:name="com.tregoproviderapp.ACTION_CANCEL_TEXT" />
+              <action android:name="com.tregoproviderapp.ACTION_DONE_RECORDING" />
+              <action android:name="com.tregoproviderapp.ACTION_CANCEL_RECORDING" />
+              <action android:name="com.tregoproviderapp.ACTION_CONFIRM_JOB" />
+              <action android:name="com.tregoproviderapp.ACTION_REDO_RECORDING" />
+              <action android:name="com.tregoproviderapp.ACTION_NOTIF_DISMISSED" />
           </intent-filter>
       </receiver>
 

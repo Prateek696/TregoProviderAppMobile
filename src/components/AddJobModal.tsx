@@ -14,16 +14,17 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { contactsAPI, jobsAPI, getAPIError } from '../services/api';
 import { mapBackendJob } from '../services/jobActions';
+import { useTranslation } from 'react-i18next';
 
-const JOB_TYPES = [
-    { value: 'house-cleaning', label: 'House Cleaning', duration: 120, price: 80 },
-    { value: 'deep-cleaning', label: 'Deep Cleaning', duration: 240, price: 150 },
-    { value: 'office-cleaning', label: 'Office Cleaning', duration: 90, price: 60 },
-    { value: 'move-in-cleaning', label: 'Move-in/Move-out Cleaning', duration: 180, price: 120 },
-    { value: 'post-construction', label: 'Post-Construction Cleanup', duration: 300, price: 200 },
-    { value: 'carpet-cleaning', label: 'Carpet Cleaning', duration: 120, price: 90 },
-    { value: 'window-cleaning', label: 'Window Cleaning', duration: 60, price: 40 },
-    { value: 'custom', label: 'Custom Job', duration: 120, price: 80 }
+const JOB_TYPE_DEFS = [
+    { value: 'house-cleaning', labelKey: 'addJob.houseCleaning', duration: 120, price: 80 },
+    { value: 'deep-cleaning', labelKey: 'addJob.deepCleaning', duration: 240, price: 150 },
+    { value: 'office-cleaning', labelKey: 'addJob.officeCleaning', duration: 90, price: 60 },
+    { value: 'move-in-cleaning', labelKey: 'addJob.moveInCleaning', duration: 180, price: 120 },
+    { value: 'post-construction', labelKey: 'addJob.postConstruction', duration: 300, price: 200 },
+    { value: 'carpet-cleaning', labelKey: 'addJob.carpetCleaning', duration: 120, price: 90 },
+    { value: 'window-cleaning', labelKey: 'addJob.windowCleaning', duration: 60, price: 40 },
+    { value: 'custom', labelKey: 'addJob.customJob', duration: 120, price: 80 }
 ];
 
 
@@ -46,6 +47,8 @@ interface AddJobModalProps {
 }
 
 export default function AddJobModal({ visible, onClose, onJobCreated }: AddJobModalProps) {
+    const { t } = useTranslation();
+    const JOB_TYPES = JOB_TYPE_DEFS.map(d => ({ ...d, label: t(d.labelKey as any) }));
     const [currentStep, setCurrentStep] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -212,7 +215,7 @@ export default function AddJobModal({ visible, onClose, onJobCreated }: AddJobMo
             await jobsAPI.update(res.data.job.id, {
                 exec_status: 'confirmed',
                 price: jobForm.price ? parseFloat(jobForm.price) : undefined,
-                scheduled_at: `${jobForm.date}T${jobForm.time}:00`,
+                scheduled_at: `${jobForm.date}T${jobForm.time}:00Z`,
                 notes: jobForm.notes,
             });
             onJobCreated(res.data.job);

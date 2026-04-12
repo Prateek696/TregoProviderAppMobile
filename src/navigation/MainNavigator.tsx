@@ -8,13 +8,15 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { showPersistentNotification, hidePersistentNotification, onRecordVoiceTap, onRecordTextTap } from '../services/notificationBar';
-import { DeviceEventEmitter } from 'react-native';
+import { DeviceEventEmitter, View, AppState } from 'react-native';
+import VoiceBubble from '../components/VoiceBubble';
+import { useTranslation } from 'react-i18next';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import { showBubble, hideBubble, hasOverlayPermission } from '../services/bubble';
 import { MainTabParamList, MainStackParamList } from './types';
 
 // Screens
-import DashboardScreen from '../screens/DashboardScreen';
+// DashboardScreen removed — not in MVP scope
 import JobsScreen from '../screens/JobsScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import ChatScreen from '../screens/ChatScreen';
@@ -70,9 +72,11 @@ function JobsStack() {
  * - Profile: account-circle (matches UserCircle)
  */
 function TabNavigator() {
+  const { t } = useTranslation();
   return (
+    <View style={{ flex: 1 }}>
     <Tab.Navigator
-      initialRouteName="Contacts"
+      initialRouteName="Jobs"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#3b82f6', // Web version blue #3b82f6
@@ -91,25 +95,10 @@ function TabNavigator() {
         },
       }}>
       <Tab.Screen
-        name="Contacts"
-        component={ContactsScreen}
-        options={{
-          tabBarLabel: 'Clients',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Icon
-              name="account-group"
-              size={size || 24}
-              color={color}
-              style={{ marginTop: 4 }}
-            />
-          ),
-        }}
-      />
-      <Tab.Screen
         name="Jobs"
         component={JobsStack}
         options={{
-          tabBarLabel: 'Jobs',
+          tabBarLabel: t('tabs.jobs'),
           tabBarIcon: ({ color, size, focused }) => (
             <Icon
               name="clipboard-text"
@@ -121,10 +110,25 @@ function TabNavigator() {
         }}
       />
       <Tab.Screen
+        name="Contacts"
+        component={ContactsScreen}
+        options={{
+          tabBarLabel: t('tabs.clients'),
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon
+              name="account-group"
+              size={size || 24}
+              color={color}
+              style={{ marginTop: 4 }}
+            />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="Schedule"
         component={ScheduleScreen}
         options={{
-          tabBarLabel: 'Schedule',
+          tabBarLabel: t('tabs.schedule'),
           tabBarIcon: ({ color, size, focused }) => (
             <Icon
               name="calendar"
@@ -139,7 +143,7 @@ function TabNavigator() {
         name="Billing"
         component={BillingScreen}
         options={{
-          tabBarLabel: 'Billing',
+          tabBarLabel: t('tabs.billing'),
           tabBarIcon: ({ color, size }) => (
             <Icon
               name="wallet"
@@ -154,7 +158,7 @@ function TabNavigator() {
         name="Profile"
         component={SettingsScreen}
         options={{
-          tabBarLabel: 'Profile',
+          tabBarLabel: t('tabs.profile'),
           tabBarIcon: ({ color, size, focused }) => (
             <Icon
               name="account-circle"
@@ -166,6 +170,7 @@ function TabNavigator() {
         }}
       />
     </Tab.Navigator>
+    </View>
   );
 }
 
@@ -181,9 +186,27 @@ export default function MainNavigator() {
       showPersistentNotification(token ?? undefined);
     });
 
-    // Start floating bubble if overlay permission is already granted
+    // Request overlay permission once (for floating bubble outside app)
     hasOverlayPermission().then(granted => {
-      if (granted) showBubble();
+      if (!granted) {
+        // Ask once — user can grant from system settings
+        jsonStorage.getItem('overlay_perm_asked').then(asked => {
+          if (!asked) {
+            const { requestOverlayPermission } = require('../services/bubble');
+            requestOverlayPermission();
+            jsonStorage.setItem('overlay_perm_asked', true);
+          }
+        });
+      }
+    });
+
+    // Show system overlay bubble when app goes to background, hide when foreground
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background') {
+        hasOverlayPermission().then(granted => { if (granted) showBubble(); });
+      } else if (nextState === 'active') {
+        hideBubble();
+      }
     });
 
     // 🎤 Voice tap → navigate to Jobs tab (VoiceBubble is there) + open it
@@ -199,11 +222,19 @@ export default function MainNavigator() {
       setTimeout(() => DeviceEventEmitter.emit('TregoOpenText'), 400);
     });
 
+    // Offline sync — auto-upload queued recordings when internet returns (app-wide)
+    const { startOfflineSyncListener } = require('../services/offlineQueue');
+    const unsubSync = startOfflineSyncListener((count: number) => {
+      console.log(`[OfflineSync] ${count} job(s) synced from queue`);
+    });
+
     return () => {
       hidePersistentNotification();
       hideBubble();
+      appStateSub.remove();
       unsubVoice();
       unsubText();
+      unsubSync();
     };
   }, []);
 
@@ -213,7 +244,6 @@ export default function MainNavigator() {
         headerShown: false,
       }}>
       <Stack.Screen name="MainTabs" component={TabNavigator} />
-      <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="Contacts" component={ContactsScreen} />
       <Stack.Screen name="Calendar" component={CalendarScreen} />
       <Stack.Screen name="Earnings" component={EarningsScreen} />

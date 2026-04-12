@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Animated,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 interface ChatTutorialModalProps {
   isVisible: boolean;
@@ -20,25 +21,17 @@ interface ChatTutorialModalProps {
   orbColor: string;
 }
 
-const tutorialSteps = [
-  {
-    id: 'orb-interaction',
-    title: 'Meet Your AI Assistant',
-    description: 'This is your AI assistant • Tap for quick actions • Double tap to record • Hold for attachments',
-  },
-  {
-    id: 'text-input',
-    title: 'Type Your Messages',
-    description: 'Type here to chat or ask for help with anything',
-  },
-];
-
 export default function ChatTutorialModal({
   isVisible,
   onDismiss,
   assistantName,
   orbColor,
 }: ChatTutorialModalProps) {
+  const { t } = useTranslation();
+  const tutorialSteps = [
+    { id: 'orb-interaction', title: t('modals.tutorial.step1Title'), description: t('modals.tutorial.step1Desc') },
+    { id: 'text-input', title: t('modals.tutorial.step2Title'), description: t('modals.tutorial.step2Desc') },
+  ];
   const [currentStep, setCurrentStep] = useState(0);
   const [fadeAnim] = useState(new Animated.Value(0));
 
@@ -117,7 +110,7 @@ export default function ChatTutorialModal({
               <Text style={styles.title}>{currentTutorialStep.title}</Text>
             </View>
             <TouchableOpacity onPress={handleSkip}>
-              <Text style={styles.skipText}>Skip</Text>
+              <Text style={styles.skipText}>{t('modals.tutorial.skip')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -145,7 +138,7 @@ export default function ChatTutorialModal({
               onPress={handleNextStep}
               style={[styles.nextButton, { backgroundColor: orbColor }]}>
               <Text style={styles.nextButtonText}>
-                {currentStep === tutorialSteps.length - 1 ? 'Got it!' : 'Next'}
+                {currentStep === tutorialSteps.length - 1 ? t('modals.tutorial.gotIt') : t('modals.tutorial.next')}
               </Text>
             </TouchableOpacity>
           </View>

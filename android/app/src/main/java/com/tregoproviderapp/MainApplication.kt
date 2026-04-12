@@ -23,5 +23,14 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     loadReactNative(this)
+    // Kick offline queue: drop corrupted/silent items, register network listener,
+    // and immediately try to flush anything that was queued while the process was dead.
+    try {
+      TregoOfflineQueue.purgeCorrupted(this)
+      TregoOfflineQueue.ensureConnectivityListener(this)
+      if (TregoOfflineQueue.count(this) > 0) TregoOfflineQueue.flush(this)
+    } catch (e: Exception) {
+      android.util.Log.e("MainApplication", "Offline queue init failed: ${e.message}")
+    }
   }
 }

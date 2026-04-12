@@ -28,7 +28,10 @@ import { mapBackendJob } from '../services/jobActions';
 import { startOfflineSyncListener } from '../services/offlineQueue';
 import { checkForPostCallPrompt, requestCallLogPermission } from '../services/callLog';
 import { onForegroundMessage } from '../services/notifications';
-import { Modal, Alert, Linking } from 'react-native';
+import { Modal, Alert, Linking, PermissionsAndroid } from 'react-native';
+import { JobsScreenSkeleton } from '../components/ui/Skeleton';
+import LanguageToggle from '../components/LanguageToggle';
+import { useTranslation } from 'react-i18next';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
 type JobsScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobsList'>;
@@ -77,6 +80,7 @@ const COLORS = {
 };
 
 export default function JobsScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<JobsScreenNavigationProp>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -139,7 +143,7 @@ export default function JobsScreen() {
   const loadJobs = async () => {
     try {
       const res = await jobsAPI.list();
-      const mapped = res.data.jobs.map(mapBackendJob) as Job[];
+      const mapped = (res.data?.jobs || []).map(mapBackendJob) as Job[];
       setJobs(mapped);
       setHasEverHadJobs(mapped.length > 0);
     } catch (err) {
@@ -161,6 +165,42 @@ export default function JobsScreen() {
     } catch (error) {
       console.error('Error loading settings:', error);
     }
+  };
+
+  const pickJobPhoto = (jobId: string, phase: 'before' | 'during' | 'after') => {
+    Alert.alert(t('jobs.addPhoto'), t('jobs.chooseSource'), [
+      {
+        text: t('common.camera'),
+        onPress: async () => {
+          if (Platform.OS === 'android') {
+            const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+            if (granted !== PermissionsAndroid.RESULTS.GRANTED) { Alert.alert(t('common.permissionRequired'), t('common.cameraPermissionNeeded')); return; }
+          }
+          launchCamera({ mediaType: 'photo', quality: 0.8, includeExtra: true }, async (res) => {
+            const asset = res.assets?.[0];
+            if (asset?.uri) {
+              try {
+                await jobsAPI.uploadPhoto(jobId, asset.uri, phase, 'provider', asset.latitude, asset.longitude);
+                Alert.alert(t('jobs.photoSaved'));
+              } catch { Alert.alert(t('jobs.uploadFailed')); }
+            }
+          });
+        },
+      },
+      {
+        text: t('common.gallery'),
+        onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8, includeExtra: true }, async (res) => {
+          const asset = res.assets?.[0];
+          if (asset?.uri) {
+            try {
+              await jobsAPI.uploadPhoto(jobId, asset.uri, phase, 'provider', asset.latitude, asset.longitude);
+              Alert.alert(t('jobs.photoSaved'));
+            } catch { Alert.alert(t('jobs.uploadFailed')); }
+          }
+        }),
+      },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
   };
 
   const today = new Date();
@@ -185,11 +225,17 @@ export default function JobsScreen() {
         return jobDate >= selectedDate && jobDate < nextDay;
       });
     } else if (filter === 'pending') {
-      filtered = filtered.filter(job => job.status === 'pending');
+      // Future scheduled jobs that are not yet completed
+      filtered = filtered.filter(job =>
+        ['pending', 'confirmed', 'en-route', 'on-site'].includes(job.status)
+      );
     } else if (filter === 'completed') {
       filtered = filtered.filter(job => job.status === 'completed');
     } else if (filter === 'review') {
-      filtered = filtered.filter(job => job.status === 'completed');
+      // Jobs just logged that need review — AI still processing or not yet confirmed
+      filtered = filtered.filter(job =>
+        job.status === 'pending' && (job.aiStatus === 'raw' || job.aiStatus === 'processing' || job.aiStatus === 'structured')
+      );
     }
 
     return filtered.sort((a, b) => {
@@ -365,34 +411,15 @@ export default function JobsScreen() {
 
         <View style={styles.standardFooter}>
           <TouchableOpacity style={styles.standardFooterButton} onPress={() => {
-              Alert.alert('Add Photo', 'Choose source', [
-                {
-                  text: 'Camera',
-                  onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
-                    if (res.assets?.[0]?.uri) {
-                      try {
-                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
-                        Alert.alert('Photo saved');
-                      } catch { Alert.alert('Upload failed'); }
-                    }
-                  }),
-                },
-                {
-                  text: 'Gallery',
-                  onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async (res) => {
-                    if (res.assets?.[0]?.uri) {
-                      try {
-                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
-                        Alert.alert('Photo saved');
-                      } catch { Alert.alert('Upload failed'); }
-                    }
-                  }),
-                },
-                { text: 'Cancel', style: 'cancel' },
+              Alert.alert(t('jobs.addPhoto'), t('jobs.photoPhase'), [
+                { text: t('jobs.before'), onPress: () => pickJobPhoto(job.id, 'before') },
+                { text: t('jobs.during'), onPress: () => pickJobPhoto(job.id, 'during') },
+                { text: t('jobs.after'),  onPress: () => pickJobPhoto(job.id, 'after') },
+                { text: t('common.cancel'), style: 'cancel' },
               ]);
             }}>
             <Icon name="camera-outline" size={18} color="#f1f5f9" />
-            <Text style={styles.standardFooterText}>Capture</Text>
+            <Text style={styles.standardFooterText}>{t('jobs.capture')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.standardFooterButton}>
@@ -418,11 +445,11 @@ export default function JobsScreen() {
     const isPaused = job.status === 'paused';
     const isCompleted = job.status === 'completed' || job.status === 'cancelled';
 
-    const mainButtonLabel = isPending ? 'Accept Job'
-      : isConfirmed ? 'Start Job'
-      : isEnRoute ? 'On Site'
-      : isOnSite ? 'Complete'
-      : isPaused ? 'Resume'
+    const mainButtonLabel = isPending ? t('jobs.acceptJob')
+      : isConfirmed ? t('jobs.startJob')
+      : isEnRoute ? t('jobs.onSite')
+      : isOnSite ? t('jobs.complete')
+      : isPaused ? t('jobs.resume')
       : null;
 
     const mainButtonIcon = isPending ? 'check'
@@ -470,19 +497,19 @@ export default function JobsScreen() {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               onPress={() =>
                 Alert.alert(
-                  'Delete Job',
-                  `Delete "${job.title}"? This cannot be undone.`,
+                  t('jobs.deleteJob'),
+                  t('jobs.deleteConfirm', { title: job.title }),
                   [
-                    { text: 'Cancel', style: 'cancel' },
+                    { text: t('common.cancel'), style: 'cancel' },
                     {
-                      text: 'Delete',
+                      text: t('common.delete'),
                       style: 'destructive',
                       onPress: async () => {
                         try {
                           await jobsAPI.update(job.id, { exec_status: 'cancelled' });
                           loadJobs();
                         } catch (e) {
-                          Alert.alert('Error', 'Could not delete job');
+                          Alert.alert(t('common.error'), t('jobs.deleteError'));
                         }
                       },
                     },
@@ -529,34 +556,15 @@ export default function JobsScreen() {
           <TouchableOpacity
             style={styles.standardFooterButton}
             onPress={() => {
-              Alert.alert('Add Photo', 'Choose source', [
-                {
-                  text: 'Camera',
-                  onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async (res) => {
-                    if (res.assets?.[0]?.uri) {
-                      try {
-                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
-                        Alert.alert('Photo saved');
-                      } catch { Alert.alert('Upload failed'); }
-                    }
-                  }),
-                },
-                {
-                  text: 'Gallery',
-                  onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async (res) => {
-                    if (res.assets?.[0]?.uri) {
-                      try {
-                        await jobsAPI.uploadPhoto(job.id, res.assets[0].uri);
-                        Alert.alert('Photo saved');
-                      } catch { Alert.alert('Upload failed'); }
-                    }
-                  }),
-                },
-                { text: 'Cancel', style: 'cancel' },
+              Alert.alert(t('jobs.addPhoto'), t('jobs.photoPhase'), [
+                { text: t('jobs.before'), onPress: () => pickJobPhoto(job.id, 'before') },
+                { text: t('jobs.during'), onPress: () => pickJobPhoto(job.id, 'during') },
+                { text: t('jobs.after'),  onPress: () => pickJobPhoto(job.id, 'after') },
+                { text: t('common.cancel'), style: 'cancel' },
               ]);
             }}>
             <Icon name="camera-outline" size={18} color="#f1f5f9" />
-            <Text style={styles.standardFooterText}>Capture</Text>
+            <Text style={styles.standardFooterText}>{t('jobs.capture')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -566,7 +574,7 @@ export default function JobsScreen() {
               if (addr) Linking.openURL(`https://maps.google.com/?q=${addr}`);
             }}>
             <Icon name="navigation-variant-outline" size={18} color="#f1f5f9" />
-            <Text style={styles.standardFooterText}>Navigate</Text>
+            <Text style={styles.standardFooterText}>{t('jobs.navigate')}</Text>
           </TouchableOpacity>
 
           {!isCompleted && mainButtonLabel && (
@@ -582,7 +590,7 @@ export default function JobsScreen() {
                 await jobsAPI.update(job.id, { exec_status: mainButtonStatus });
                 loadJobs();
               } catch (e) {
-                Alert.alert('Error', 'Could not update job status');
+                Alert.alert(t('common.error'), t('jobs.statusUpdateError'));
               }
             }}>
             <Icon name={mainButtonIcon} size={18} color="#fff" />
@@ -603,9 +611,11 @@ export default function JobsScreen() {
 
   const firstDelayedIndex = filteredJobs.findIndex(job => job.status === 'delayed');
 
+  if (isLoading && jobs.length === 0) return <JobsScreenSkeleton />;
+
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar hidden={true} />
 
       {/* ── Auto-schedule toast ── */}
       {scheduleToast && (
@@ -625,6 +635,7 @@ export default function JobsScreen() {
           <Text style={styles.topBarTitle}>Jobs</Text>
         </View>
         <View style={styles.topBarRight}>
+          <LanguageToggle />
           <TouchableOpacity style={styles.notificationButton}>
             <Icon name="bell-outline" size={24} color={COLORS.textPrimary} />
             <View style={styles.notificationBadge}>
@@ -641,22 +652,22 @@ export default function JobsScreen() {
         <TouchableOpacity
           style={[styles.tab, filter === 'week' && { backgroundColor: `${orbColor}33` }]}
           onPress={() => setFilter('week')}>
-          <Text style={[styles.tabText, filter === 'week' && { color: orbColor, fontWeight: '600' }]}>Week</Text>
+          <Text style={[styles.tabText, filter === 'week' && { color: orbColor, fontWeight: '600' }]}>{t('jobs.week')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, filter === 'pending' && { backgroundColor: `${orbColor}33` }]}
           onPress={() => setFilter('pending')}>
-          <Text style={[styles.tabText, filter === 'pending' && { color: orbColor, fontWeight: '600' }]}>Pending</Text>
+          <Text style={[styles.tabText, filter === 'pending' && { color: orbColor, fontWeight: '600' }]}>{t('jobs.pending')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, filter === 'completed' && { backgroundColor: `${orbColor}33` }]}
           onPress={() => setFilter('completed')}>
-          <Text style={[styles.tabText, filter === 'completed' && { color: orbColor, fontWeight: '600' }]}>Completed</Text>
+          <Text style={[styles.tabText, filter === 'completed' && { color: orbColor, fontWeight: '600' }]}>{t('jobs.completed')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, filter === 'review' && { backgroundColor: `${orbColor}33` }]}
           onPress={() => setFilter('review')}>
-          <Text style={[styles.tabText, filter === 'review' && { color: orbColor, fontWeight: '600' }]}>Review</Text>
+          <Text style={[styles.tabText, filter === 'review' && { color: orbColor, fontWeight: '600' }]}>{t('jobs.review')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -700,7 +711,7 @@ export default function JobsScreen() {
           ) : (
             <View style={styles.emptyState}>
               <Icon name="briefcase-outline" size={48} color={COLORS.textSecondary} />
-              <Text style={styles.emptyStateText}>No jobs found</Text>
+              <Text style={styles.emptyStateText}>{t('jobs.noJobs')}</Text>
             </View>
           )
         ) : (
@@ -734,7 +745,7 @@ export default function JobsScreen() {
             <View>
               <View style={styles.sectionHeader}>
                 <Text style={styles.standardSectionHeaderText}>
-                  {filter === 'completed' ? 'Completed' : 'Upcoming'} ({filteredJobs.filter(j => j.status !== 'paused' && j.status !== 'delayed').length})
+                  {filter === 'completed' ? t('jobs.completed') : t('jobs.upcoming')} ({filteredJobs.filter(j => j.status !== 'paused' && j.status !== 'delayed').length})
                 </Text>
               </View>
               {filteredJobs.filter(j => j.status !== 'paused' && j.status !== 'delayed').map(job => renderStandardJobCard(job))}
@@ -745,7 +756,7 @@ export default function JobsScreen() {
 
 
 
-      {/* Voice Bubble — hold to speak, release to submit */}
+      {/* Voice bubble — fixed position, only on Jobs tab */}
       <View style={styles.bubbleWrapper}>
         <VoiceBubble onJobCreated={handleJobCreated} />
       </View>

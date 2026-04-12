@@ -16,6 +16,7 @@ import {
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Colors } from '../../shared/constants/colors';
+import { useTranslation } from 'react-i18next';
 
 interface PauseJobModalProps {
   visible: boolean;
@@ -30,6 +31,7 @@ export function PauseJobModal({
   onConfirm,
   jobTitle,
 }: PauseJobModalProps) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
 
   const handleConfirm = () => {
@@ -53,19 +55,19 @@ export function PauseJobModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.container}>
           <View style={styles.modal}>
-            <Text style={styles.title}>Pause Job</Text>
+            <Text style={styles.title}>{t('modals.pause.title')}</Text>
             {jobTitle && (
               <Text style={styles.subtitle}>{jobTitle}</Text>
             )}
             <Text style={styles.description}>
-              Why are you pausing this job? (Optional)
+              {t('modals.pause.description')}
             </Text>
 
             <View style={styles.inputContainer}>
-              <Label>Reason</Label>
+              <Label>{t('modals.pause.reasonLabel')}</Label>
               <TextInput
                 style={styles.input}
-                placeholder="Enter reason for pausing..."
+                placeholder={t('modals.pause.reasonPlaceholder')}
                 value={reason}
                 onChangeText={setReason}
                 multiline
@@ -76,13 +78,13 @@ export function PauseJobModal({
 
             <View style={styles.actions}>
               <Button
-                title="Cancel"
+                title={t('common.cancel')}
                 variant="outline"
                 onPress={handleClose}
                 style={styles.button}
               />
               <Button
-                title="Pause Job"
+                title={t('modals.pause.title')}
                 onPress={handleConfirm}
                 style={[styles.button, { backgroundColor: Colors.statusPausedText }]}
               />

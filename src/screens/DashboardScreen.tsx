@@ -23,6 +23,7 @@ import { Colors } from '../shared/constants/colors';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import { formatDateRange } from '../shared/utils/dateUtils';
 import { jobsAPI } from '../services/api';
+import { DashboardScreenSkeleton } from '../components/ui/Skeleton';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'Dashboard'>;
 
@@ -73,14 +74,16 @@ export default function DashboardScreen() {
 
   const loadDashboard = async () => {
     try {
-      const [statsRes, earningsRes] = await Promise.all([
-        jobsAPI.stats(),
-        jobsAPI.earnings(),
-      ]);
+      const statsRes = await jobsAPI.stats();
       setStatsData(statsRes.data);
+    } catch (err) {
+      console.warn('Stats load error:', err);
+    }
+    try {
+      const earningsRes = await jobsAPI.earnings();
       setEarningsData(earningsRes.data);
     } catch (err) {
-      console.error('Dashboard load error:', err);
+      console.warn('Earnings load error:', err);
     }
   };
 
@@ -178,6 +181,8 @@ export default function DashboardScreen() {
       </CardContent>
     </Card>
   );
+
+  if (!statsData && !earningsData) return <DashboardScreenSkeleton />;
 
   return (
     <View style={styles.screen}>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trego dots logo — monochrome white for notification small icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="100" android:viewportHeight="100">
+    <!-- Top center dot -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M50,8 a10,10 0 1,1 0,20 a10,10 0 1,1 0,-20"/>
+    <!-- Left dot -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M14,32 a10,10 0 1,1 0,20 a10,10 0 1,1 0,-20"/>
+    <!-- Right dot -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M86,32 a10,10 0 1,1 0,20 a10,10 0 1,1 0,-20"/>
+    <!-- Center blob (larger, connects down) -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M50,32 a14,14 0 1,1 0,28 a14,14 0 1,1 0,-28"/>
+    <!-- Center stem down -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M43,52 L57,52 L54,78 Q50,92 46,78 Z"/>
+    <!-- Bottom left dot -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M14,70 a10,10 0 1,1 0,20 a10,10 0 1,1 0,-20"/>
+    <!-- Bottom right dot -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M86,70 a10,10 0 1,1 0,20 a10,10 0 1,1 0,-20"/>
+</vector>

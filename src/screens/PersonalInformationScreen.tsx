@@ -14,6 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useTranslation } from 'react-i18next';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { StartupOrb } from '../components/StartupOrb';
 import { Button } from '../components/ui/Button';
@@ -54,6 +55,7 @@ export default function PersonalInformationScreen({
   onContinue,
   initialData,
 }: PersonalInformationScreenProps) {
+  const { t } = useTranslation();
   const [firstName, setFirstName] = useState(initialData?.firstName || '');
   const [lastName, setLastName] = useState(initialData?.lastName || '');
   const [countryCode, setCountryCode] = useState(initialData?.countryCode || 'PT');
@@ -68,7 +70,7 @@ export default function PersonalInformationScreen({
     
     // Validate if value is entered
     if (cleanValue.length > 0 && !validateVatNif(cleanValue)) {
-      setVatNifError('Enter a valid 9-digit VAT/NIF number');
+      setVatNifError(t('personalInfo.vatNifError'));
     } else {
       setVatNifError('');
     }
@@ -83,7 +85,7 @@ export default function PersonalInformationScreen({
       return;
     }
     if (vatNif && !validateVatNif(vatNif)) {
-      setVatNifError('Enter a valid 9-digit VAT/NIF number');
+      setVatNifError(t('personalInfo.vatNifError'));
       return;
     }
 
@@ -112,9 +114,9 @@ export default function PersonalInformationScreen({
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Your Personal Information</Text>
+          <Text style={styles.title}>{t('personalInfo.title')}</Text>
           <Text style={styles.subtitle}>
-            We need some basic details to set up your provider account.
+            {t('personalInfo.subtitle')}
           </Text>
         </View>
 
@@ -123,9 +125,9 @@ export default function PersonalInformationScreen({
           {/* Name Fields - 2 columns */}
           <View style={styles.nameRow}>
             <View style={styles.firstNameContainer}>
-              <Label style={styles.label}>First Name</Label>
+              <Label style={styles.label}>{t('personalInfo.firstName')}</Label>
               <Input
-                placeholder="João"
+                placeholder={t('personalInfo.firstNamePh')}
                 value={firstName}
                 onChangeText={setFirstName}
                 autoCapitalize="words"
@@ -133,9 +135,9 @@ export default function PersonalInformationScreen({
               />
             </View>
             <View style={styles.lastNameContainer}>
-              <Label style={styles.label}>Last Name</Label>
+              <Label style={styles.label}>{t('personalInfo.lastName')}</Label>
               <Input
-                placeholder="Silva Santos"
+                placeholder={t('personalInfo.lastNamePh')}
                 value={lastName}
                 onChangeText={setLastName}
                 autoCapitalize="words"
@@ -146,7 +148,7 @@ export default function PersonalInformationScreen({
 
           {/* VAT/NIF */}
           <View style={styles.vatNifContainer}>
-            <Label style={styles.label}>VAT/NIF</Label>
+            <Label style={styles.label}>{t('personalInfo.vatNif')}</Label>
             <View style={styles.vatNifRow}>
               <View style={styles.countryCodePickerContainer}>
                 <Text style={styles.countryCodeDisplayText}>{countryCode}</Text>
@@ -162,7 +164,7 @@ export default function PersonalInformationScreen({
               </View>
               <View style={styles.vatNifInputContainer}>
                 <Input
-                  placeholder="123456789"
+                  placeholder={t('personalInfo.vatNifPh')}
                   value={vatNif}
                   onChangeText={handleVatNifChange}
                   keyboardType="numeric"
@@ -195,10 +197,10 @@ export default function PersonalInformationScreen({
                 </View>
                 <View style={styles.certificationTextContainer}>
                   <Text style={styles.certificationTitle}>
-                    Want to get certified now?
+                    {t('personalInfo.certifyTitle')}
                   </Text>
                   <Text style={styles.certificationSubtitle}>
-                    Build trust with clients • Verified badge • Boost your profile
+                    {t('personalInfo.certifySubtitle')}
                   </Text>
                 </View>
               </View>
@@ -219,8 +221,7 @@ export default function PersonalInformationScreen({
               exiting={FadeOut.duration(200)}
               style={styles.certificationExpanded}>
               <Text style={styles.certificationNote}>
-                Certification can be completed later in Settings. This is optional
-                for now.
+                {t('personalInfo.certifyNote')}
               </Text>
             </Animated.View>
           )}
@@ -230,10 +231,10 @@ export default function PersonalInformationScreen({
       {/* Footer with Continue Button */}
       <View style={styles.footer}>
         <TouchableOpacity onPress={onBack} style={styles.backButtonTouchable}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>{t('personalInfo.back')}</Text>
         </TouchableOpacity>
         <Button
-          title="Continue"
+          title={t('personalInfo.continue')}
           onPress={handleContinue}
           disabled={!canContinue}
           style={[styles.continueButton, { backgroundColor: orbColor }]}

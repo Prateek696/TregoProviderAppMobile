@@ -11,9 +11,13 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import { JobDetailScreenSkeleton } from '../components/ui/Skeleton';
+import LanguageToggle from '../components/LanguageToggle';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
@@ -24,6 +28,7 @@ import {
 } from '../services/jobActions';
 import { jobsAPI } from '../services/api';
 import { PauseJobModal, CancelJobModal, CompleteJobModal } from '../components/modals';
+import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
 
@@ -97,6 +102,7 @@ function getDaysInMonth(month: number, year: number) {
 }
 
 export default function JobDetailScreen() {
+  const { t } = useTranslation();
   const route = useRoute();
   const navigation = useNavigation<JobDetailScreenNavigationProp>();
   const { jobId, pendingAccept } = (route.params as { jobId: string; pendingAccept?: boolean }) || {};
@@ -135,13 +141,13 @@ export default function JobDetailScreen() {
 
   const loadJob = async () => {
     try {
-      const [jobRes, photosRes] = await Promise.all([
-        jobsAPI.get(jobId),
-        jobsAPI.getPhotos(jobId),
-      ]);
+      const jobRes = await jobsAPI.get(jobId);
       setJob(mapBackendJob(jobRes.data.job) as Job);
-      setPhotos(photosRes.data.photos.map((p: any) => ({ uri: p.photo_url, phase: p.phase || 'during' })));
     } catch (e) { console.error('loadJob:', e); }
+    try {
+      const photosRes = await jobsAPI.getPhotos(jobId);
+      setPhotos(photosRes.data.photos.map((p: any) => ({ uri: p.photo_url, phase: p.phase || 'during' })));
+    } catch (e) { console.warn('loadPhotos:', e); }
   };
 
   const openAcceptModal = (j: Job) => {
@@ -169,9 +175,9 @@ export default function JobDetailScreen() {
   // Returns list of missing required fields
   const getMissingFields = (j: Job): string[] => {
     const missing: string[] = [];
-    if (!j.client) missing.push('Client name');
-    if (!j.location && !j.address) missing.push('Location / address');
-    if (!acceptDate) missing.push('Scheduled date');
+    if (!j.client) missing.push(t('jobs.missingClient'));
+    if (!j.location && !j.address) missing.push(t('jobs.missingLocation'));
+    if (!acceptDate) missing.push(t('jobs.missingDate'));
     return missing;
   };
 
@@ -180,16 +186,16 @@ export default function JobDetailScreen() {
     const missing = getMissingFields(job);
     if (missing.length > 0) {
       Alert.alert(
-        'Missing Details',
-        `Please fill in the following before accepting:\n\n• ${missing.join('\n• ')}\n\nTap "Edit Job" to complete the details.`,
+        t('jobs.missingDetails'),
+        t('jobs.missingBeforeAccept', { items: missing.join('\n• ') }),
         [
-          { text: 'Edit Job', onPress: () => { setShowAcceptModal(false); navigation.navigate('JobEdit', { jobId: job.id }); } },
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('jobs.editJob'), onPress: () => { setShowAcceptModal(false); navigation.navigate('JobEdit', { jobId: job.id }); } },
+          { text: t('common.cancel'), style: 'cancel' },
         ]
       );
       return;
     }
-    const scheduled_at = new Date(`${acceptDate}T${acceptTime || '09:00'}:00`).toISOString();
+    const scheduled_at = new Date(`${acceptDate}T${acceptTime || '09:00'}:00Z`).toISOString();
     try {
       setAcceptSaving(true);
       await jobsAPI.update(job.id, {
@@ -200,53 +206,63 @@ export default function JobDetailScreen() {
       setShowAcceptModal(false);
       await loadJob();
     } catch (e) {
-      Alert.alert('Error', 'Could not confirm job. Try again.');
+      Alert.alert(t('common.error'), t('jobs.confirmError'));
     } finally {
       setAcceptSaving(false);
     }
   };
 
   const handleAddPhoto = () => {
-    Alert.alert('Photo Phase', 'When was this taken?', [
-      { text: 'Before', onPress: () => pickPhotoSource('before') },
-      { text: 'During', onPress: () => pickPhotoSource('during') },
-      { text: 'After',  onPress: () => pickPhotoSource('after') },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('jobs.addPhoto'), t('jobs.photoPhase'), [
+      { text: t('jobs.before'), onPress: () => pickPhotoSource('before') },
+      { text: t('jobs.during'), onPress: () => pickPhotoSource('during') },
+      { text: t('jobs.after'),  onPress: () => pickPhotoSource('after') },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
+  };
+
+  const requestCameraPermission = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    try {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch { return false; }
   };
 
   const pickPhotoSource = (phase: 'before' | 'during' | 'after') => {
-    Alert.alert('Add Photo', 'Choose source', [
-      { text: 'Camera',  onPress: () => launchCamera({ mediaType: 'photo', quality: 0.8 }, async r => { if (r.assets?.[0]?.uri) await uploadPhoto(r.assets[0].uri, phase); }) },
-      { text: 'Gallery', onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async r => { if (r.assets?.[0]?.uri) await uploadPhoto(r.assets[0].uri, phase); }) },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('jobs.addPhoto'), t('jobs.chooseSource'), [
+      { text: t('common.camera'),  onPress: async () => {
+        const ok = await requestCameraPermission();
+        if (!ok) { Alert.alert(t('common.permissionRequired'), t('jobs.cameraPermissionForPhotos')); return; }
+        launchCamera({ mediaType: 'photo', quality: 0.8, includeExtra: true }, async r => {
+          const asset = r.assets?.[0];
+          if (asset?.uri) await uploadPhoto(asset.uri, phase, asset.latitude, asset.longitude);
+        });
+      }},
+      { text: t('common.gallery'), onPress: () => launchImageLibrary({ mediaType: 'photo', quality: 0.8, includeExtra: true }, async r => {
+        const asset = r.assets?.[0];
+        if (asset?.uri) await uploadPhoto(asset.uri, phase, asset.latitude, asset.longitude);
+      }) },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
 
-  const uploadPhoto = async (uri: string, phase: 'before' | 'during' | 'after') => {
+  const uploadPhoto = async (uri: string, phase: 'before' | 'during' | 'after', lat?: number, lng?: number) => {
     if (!job) return;
     setUploadingPhoto(true);
     setPhotos(prev => [...prev, { uri, phase }]);
     try {
-      await jobsAPI.uploadPhoto(job.id, uri, phase);
+      await jobsAPI.uploadPhoto(job.id, uri, phase, 'provider', lat, lng);
     } catch {
       setPhotos(prev => prev.filter(p => p.uri !== uri));
-      Alert.alert('Upload Failed', 'Could not upload photo. Try again.');
+      Alert.alert(t('jobs.uploadFailed'), t('jobs.uploadFailedMessage'));
     } finally {
       setUploadingPhoto(false);
     }
   };
 
   // ── Loading state ────────────────────────────────────────────────────────
-  if (!job) {
-    return (
-      <View style={[s.screen, { justifyContent: 'center', alignItems: 'center' }]}>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-        <ActivityIndicator color={C.blue} size="large" />
-        <Text style={[s.infoLabel, { marginTop: 12 }]}>Loading job…</Text>
-      </View>
-    );
-  }
+  if (!job) return <JobDetailScreenSkeleton />;
 
   const st = statusConfig(job.status);
   const isProcessing = !['structured', 'scheduled', 'billed'].includes(job.aiStatus || '');
@@ -273,7 +289,7 @@ export default function JobDetailScreen() {
       case 'paused':
         return <ActionBtn label="Resume Job" color={C.amber} icon="play-circle-outline" onPress={async () => { const r = await resumeJob(job.id); if (r.success) loadJob(); }} />;
       case 'completed':
-        return <ActionBtn label="Create Invoice" color={C.blue} icon="file-document-outline" onPress={async () => { try { await jobsAPI.bill(job.id); Alert.alert('Invoice Created', 'Moloni invoice issued.'); loadJob(); } catch { Alert.alert('Failed', 'Could not create invoice.'); } }} />;
+        return <ActionBtn label={t('jobs.createInvoice')} color={C.blue} icon="file-document-outline" onPress={async () => { try { await jobsAPI.bill(job.id); Alert.alert(t('jobs.invoiceCreated'), t('jobs.invoiceCreatedMessage')); loadJob(); } catch { Alert.alert(t('jobs.invoiceFailed'), t('jobs.invoiceFailedMessage')); } }} />;
       default:
         return null;
     }
@@ -281,7 +297,7 @@ export default function JobDetailScreen() {
 
   return (
     <View style={s.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <StatusBar hidden={true} />
 
       {/* ── Header ── */}
       <View style={s.header}>
@@ -289,12 +305,15 @@ export default function JobDetailScreen() {
           <Icon name="arrow-left" size={22} color={C.text} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Job Details</Text>
-        <TouchableOpacity
-          style={s.headerEdit}
-          onPress={() => navigation.navigate('JobEdit', { jobId: job.id })}>
-          <Icon name="pencil-outline" size={18} color={C.blue} />
-          <Text style={s.headerEditText}>Edit</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <LanguageToggle />
+          <TouchableOpacity
+            style={s.headerEdit}
+            onPress={() => navigation.navigate('JobEdit', { jobId: job.id })}>
+            <Icon name="pencil-outline" size={18} color={C.blue} />
+            <Text style={s.headerEditText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Processing banner ── */}

@@ -25,15 +25,35 @@ import { Colors } from '../shared/constants/colors';
 import { jobsAPI, contactsAPI, getAPIError } from '../services/api';
 import { mapBackendJob } from '../services/jobActions';
 import CountryPicker, { Country, COUNTRIES } from '../components/ui/CountryPicker';
+import { useTranslation } from 'react-i18next';
 
 const DEFAULT_COUNTRY: Country = COUNTRIES.find(c => c.code === 'PT') ?? { name: 'Portugal', dialCode: '+351', code: 'PT', flag: '🇵🇹' };
 
 type JobEditNavigationProp = NativeStackNavigationProp<MainStackParamList, 'JobEdit'>;
 
-const CATEGORIES = ['General', 'Plumbing', 'Electrical', 'Cleaning', 'Painting', 'Carpentry', 'HVAC', 'Landscaping', 'Other'];
+const CATEGORY_KEYS = ['General', 'Plumbing', 'Electrical', 'Cleaning', 'Painting', 'Carpentry', 'HVAC', 'Landscaping', 'Other'];
+const CATEGORY_T_KEYS: Record<string, string> = {
+  General: 'jobEdit.categoryGeneral',
+  Plumbing: 'jobEdit.categoryPlumbing',
+  Electrical: 'jobEdit.categoryElectrical',
+  Cleaning: 'jobEdit.categoryCleaning',
+  Painting: 'jobEdit.categoryPainting',
+  Carpentry: 'jobEdit.categoryCarpentry',
+  HVAC: 'jobEdit.categoryHvac',
+  Landscaping: 'jobEdit.categoryLandscaping',
+  Other: 'jobEdit.categoryOther',
+};
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
+const PRIORITY_T_KEYS: Record<string, string> = {
+  low: 'jobEdit.priorityLow',
+  normal: 'jobEdit.priorityNormal',
+  high: 'jobEdit.priorityHigh',
+  urgent: 'jobEdit.priorityUrgent',
+};
 
 export default function JobEditScreen() {
+  const { t } = useTranslation();
+  const CATEGORIES = CATEGORY_KEYS;
   const route = useRoute();
   const navigation = useNavigation<JobEditNavigationProp>();
   const { jobId } = (route.params as { jobId: string }) || {};
@@ -66,7 +86,8 @@ export default function JobEditScreen() {
   const MINUTES_OPTS = [0, 15, 30, 45];
 
   const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTHS = [t('months.janShort'), t('months.febShort'), t('months.marShort'), t('months.aprShort'), t('months.mayShort'), t('months.junShort'),
+    t('months.julShort'), t('months.augShort'), t('months.sepShort'), t('months.octShort'), t('months.novShort'), t('months.decShort')];
   const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() + i);
 
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -145,7 +166,7 @@ export default function JobEditScreen() {
         }
       }
     } catch (err) {
-      Alert.alert('Error', 'Could not load job details.');
+      Alert.alert(t('common.error'), t('jobEdit.loadError'));
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -165,8 +186,8 @@ export default function JobEditScreen() {
     const name = newClient.type === 'individual'
       ? `${newClient.firstName} ${newClient.lastName}`.trim()
       : newClient.businessName;
-    if (!name) { Alert.alert('Name is required'); return; }
-    if (!validateNif(newClient.nif)) { Alert.alert('Invalid NIF', 'NIF must be exactly 9 digits.'); return; }
+    if (!name) { Alert.alert(t('jobEdit.nameRequired')); return; }
+    if (!validateNif(newClient.nif)) { Alert.alert(t('jobEdit.invalidNif'), t('jobEdit.nifMustBe9')); return; }
     const fullPhone = newClient.phone ? `${newCountry.dialCode}${newClient.phone.replace(/^0/, '')}` : '';
     try {
       const res = await contactsAPI.create({
@@ -191,7 +212,7 @@ export default function JobEditScreen() {
       setNewClient({ nif: '', type: 'individual', firstName: '', lastName: '', businessName: '', phone: '', email: '' });
       setNewCountry(DEFAULT_COUNTRY);
     } catch (err) {
-      Alert.alert('Error', getAPIError(err));
+      Alert.alert(t('common.error'), getAPIError(err));
     }
   };
 
@@ -200,8 +221,8 @@ export default function JobEditScreen() {
     const name = editClient.type === 'individual'
       ? `${editClient.firstName} ${editClient.lastName}`.trim()
       : editClient.businessName;
-    if (!name) { Alert.alert('Name is required'); return; }
-    if (!validateNif(editClient.nif)) { Alert.alert('Invalid NIF', 'NIF must be exactly 9 digits.'); return; }
+    if (!name) { Alert.alert(t('jobEdit.nameRequired')); return; }
+    if (!validateNif(editClient.nif)) { Alert.alert(t('jobEdit.invalidNif'), t('jobEdit.nifMustBe9')); return; }
     const fullPhone = editClient.phone ? `${editCountry.dialCode}${editClient.phone.replace(/^0/, '')}` : '';
     try {
       await contactsAPI.update(selectedClient.id, {
@@ -224,13 +245,13 @@ export default function JobEditScreen() {
       setClientsList(prev => prev.map(c => c.id === selectedClient.id ? updated : c));
       setIsEditingClient(false);
     } catch (err) {
-      Alert.alert('Error', getAPIError(err));
+      Alert.alert(t('common.error'), getAPIError(err));
     }
   };
 
   const handleSave = async () => {
     if (!title.trim()) {
-      Alert.alert('Validation', 'Title is required.');
+      Alert.alert(t('jobEdit.validation'), t('jobEdit.titleRequired'));
       return;
     }
 
@@ -240,7 +261,7 @@ export default function JobEditScreen() {
       let scheduled_at: string | undefined;
       if (scheduledDate) {
         const timeStr = scheduledTime || '09:00';
-        scheduled_at = new Date(`${scheduledDate}T${timeStr}:00`).toISOString();
+        scheduled_at = new Date(`${scheduledDate}T${timeStr}:00Z`).toISOString();
       }
 
       await jobsAPI.update(jobId, {
@@ -259,7 +280,7 @@ export default function JobEditScreen() {
 
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Save Failed', getAPIError(err));
+      Alert.alert(t('jobEdit.saveFailed'), getAPIError(err));
     } finally {
       setSaving(false);
     }
@@ -271,9 +292,9 @@ export default function JobEditScreen() {
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Icon name="chevron-left" size={24} color={Colors.foreground} />
-            <Text style={styles.backButtonText}>Back</Text>
+            <Text style={styles.backButtonText}>{t('jobEdit.back')}</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Job</Text>
+          <Text style={styles.headerTitle}>{t('jobEdit.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.center}>
@@ -296,7 +317,7 @@ export default function JobEditScreen() {
           {saving ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>{t('jobEdit.save')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -305,7 +326,7 @@ export default function JobEditScreen() {
 
         {/* Client */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Client</Text>
+          <Text style={styles.sectionTitle}>{t('jobEdit.client')}</Text>
 
           {!isCreatingClient ? (
             <>
@@ -350,14 +371,14 @@ export default function JobEditScreen() {
                 </TouchableOpacity>
               ) : selectedClient && isEditingClient ? (
                 <>
-                  <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>Edit Client</Text>
+                  <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>{t('jobEdit.editClient')}</Text>
 
-                  <Text style={styles.fieldLabel}>Client Type</Text>
+                  <Text style={styles.fieldLabel}>{t('jobEdit.clientType')}</Text>
                   <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                    {['individual', 'business'].map(t => (
-                      <TouchableOpacity key={t} style={[styles.typeChip, editClient.type === t && styles.typeChipActive]}
-                        onPress={() => setEditClient({ ...editClient, type: t })}>
-                        <Text style={[styles.typeChipText, editClient.type === t && { color: '#fff' }]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
+                    {['individual', 'business'].map(ct => (
+                      <TouchableOpacity key={ct} style={[styles.typeChip, editClient.type === ct && styles.typeChipActive]}
+                        onPress={() => setEditClient({ ...editClient, type: ct })}>
+                        <Text style={[styles.typeChipText, editClient.type === ct && { color: '#fff' }]}>{ct === 'individual' ? t('jobEdit.individual') : t('jobEdit.business')}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -365,42 +386,42 @@ export default function JobEditScreen() {
                   {editClient.type === 'individual' ? (
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.fieldLabel}>First Name *</Text>
-                        <TextInput style={styles.input} placeholder="João" placeholderTextColor={E.textMuted} value={editClient.firstName} onChangeText={t => setEditClient({ ...editClient, firstName: t })} />
+                        <Text style={styles.fieldLabel}>{t('jobEdit.firstName')}</Text>
+                        <TextInput style={styles.input} placeholder={t('jobEdit.firstNamePh')} placeholderTextColor={E.textMuted} value={editClient.firstName} onChangeText={v => setEditClient({ ...editClient, firstName: v })} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.fieldLabel}>Last Name</Text>
-                        <TextInput style={styles.input} placeholder="Silva" placeholderTextColor={E.textMuted} value={editClient.lastName} onChangeText={t => setEditClient({ ...editClient, lastName: t })} />
+                        <Text style={styles.fieldLabel}>{t('jobEdit.lastName')}</Text>
+                        <TextInput style={styles.input} placeholder={t('jobEdit.lastNamePh')} placeholderTextColor={E.textMuted} value={editClient.lastName} onChangeText={v => setEditClient({ ...editClient, lastName: v })} />
                       </View>
                     </View>
                   ) : (
                     <>
-                      <Text style={styles.fieldLabel}>Business Name *</Text>
-                      <TextInput style={styles.input} placeholder="Company Lda" placeholderTextColor={E.textMuted} value={editClient.businessName} onChangeText={t => setEditClient({ ...editClient, businessName: t })} />
+                      <Text style={styles.fieldLabel}>{t('jobEdit.businessName')}</Text>
+                      <TextInput style={styles.input} placeholder={t('jobEdit.businessNamePh')} placeholderTextColor={E.textMuted} value={editClient.businessName} onChangeText={v => setEditClient({ ...editClient, businessName: v })} />
                     </>
                   )}
 
-                  <Text style={styles.fieldLabel}>NIF (Tax ID)</Text>
+                  <Text style={styles.fieldLabel}>{t('jobEdit.nif')}</Text>
                   <View style={styles.nifRow}>
                     <View style={styles.nifPrefix}><Text style={styles.nifPrefixText}>PT</Text></View>
-                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="123456789" placeholderTextColor={E.textMuted} value={editClient.nif} onChangeText={t => setEditClient({ ...editClient, nif: t.replace(/\D/g, '').slice(0, 9) })} keyboardType="number-pad" maxLength={9} />
+                    <TextInput style={[styles.input, { flex: 1 }]} placeholder={t('jobEdit.nifPh')} placeholderTextColor={E.textMuted} value={editClient.nif} onChangeText={v => setEditClient({ ...editClient, nif: v.replace(/\D/g, '').slice(0, 9) })} keyboardType="number-pad" maxLength={9} />
                   </View>
 
-                  <Text style={styles.fieldLabel}>Phone</Text>
+                  <Text style={styles.fieldLabel}>{t('jobEdit.phone')}</Text>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <CountryPicker selected={editCountry} onSelect={setEditCountry} />
-                    <TextInput style={[styles.input, { flex: 1 }]} placeholder="912 345 678" placeholderTextColor={E.textMuted} value={editClient.phone} onChangeText={t => setEditClient({ ...editClient, phone: t })} keyboardType="phone-pad" />
+                    <TextInput style={[styles.input, { flex: 1 }]} placeholder={t('jobEdit.phonePh')} placeholderTextColor={E.textMuted} value={editClient.phone} onChangeText={v => setEditClient({ ...editClient, phone: v })} keyboardType="phone-pad" />
                   </View>
 
-                  <Text style={styles.fieldLabel}>Email</Text>
-                  <TextInput style={styles.input} placeholder="client@email.com" placeholderTextColor={E.textMuted} value={editClient.email} onChangeText={t => setEditClient({ ...editClient, email: t })} keyboardType="email-address" autoCapitalize="none" />
+                  <Text style={styles.fieldLabel}>{t('jobEdit.email')}</Text>
+                  <TextInput style={styles.input} placeholder={t('jobEdit.emailPh')} placeholderTextColor={E.textMuted} value={editClient.email} onChangeText={v => setEditClient({ ...editClient, email: v })} keyboardType="email-address" autoCapitalize="none" />
 
                   <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
                     <TouchableOpacity style={[styles.createClientBtn, { flex: 1 }]} onPress={() => setIsEditingClient(false)}>
-                      <Text style={[styles.createClientBtnText, { color: E.textMuted }]}>Cancel</Text>
+                      <Text style={[styles.createClientBtnText, { color: E.textMuted }]}>{t('common.cancel')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.saveBottomButton, { flex: 2, marginTop: 0, height: 42 }]} onPress={handleUpdateClient}>
-                      <Text style={styles.saveBottomButtonText}>Save Client</Text>
+                      <Text style={styles.saveBottomButtonText}>{t('jobEdit.saveClient')}</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -410,7 +431,7 @@ export default function JobEditScreen() {
                     <Icon name="magnify" size={18} color={E.textMuted} style={{ marginRight: 6 }} />
                     <TextInput
                       style={styles.searchInput}
-                      placeholder="Search name, phone or NIF..."
+                      placeholder={t('jobEdit.searchClient')}
                       placeholderTextColor={E.textMuted}
                       value={clientSearch}
                       onChangeText={setClientSearch}
@@ -439,18 +460,18 @@ export default function JobEditScreen() {
               {!selectedClient && (
                 <TouchableOpacity style={styles.createClientBtn} onPress={() => setIsCreatingClient(true)}>
                   <Icon name="plus" size={18} color={E.blue} />
-                  <Text style={styles.createClientBtnText}>Create New Client</Text>
+                  <Text style={styles.createClientBtnText}>{t('jobEdit.createNewClient')}</Text>
                 </TouchableOpacity>
               )}
             </>
           ) : (
             <>
-              <Text style={styles.fieldLabel}>Client Type</Text>
+              <Text style={styles.fieldLabel}>{t('jobEdit.clientType')}</Text>
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                {['individual', 'business'].map(t => (
-                  <TouchableOpacity key={t} style={[styles.typeChip, newClient.type === t && styles.typeChipActive]}
-                    onPress={() => setNewClient({ ...newClient, type: t })}>
-                    <Text style={[styles.typeChipText, newClient.type === t && { color: '#fff' }]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
+                {['individual', 'business'].map(ct => (
+                  <TouchableOpacity key={ct} style={[styles.typeChip, newClient.type === ct && styles.typeChipActive]}
+                    onPress={() => setNewClient({ ...newClient, type: ct })}>
+                    <Text style={[styles.typeChipText, newClient.type === ct && { color: '#fff' }]}>{ct === 'individual' ? t('jobEdit.individual') : t('jobEdit.business')}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -459,41 +480,41 @@ export default function JobEditScreen() {
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.fieldLabel}>First Name *</Text>
-                    <TextInput style={styles.input} placeholder="João" placeholderTextColor={E.textMuted} value={newClient.firstName} onChangeText={t => setNewClient({ ...newClient, firstName: t })} />
+                    <TextInput style={styles.input} placeholder={t('jobEdit.firstNamePh')} placeholderTextColor={E.textMuted} value={newClient.firstName} onChangeText={v => setNewClient({ ...newClient, firstName: v })} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.fieldLabel}>Last Name</Text>
-                    <TextInput style={styles.input} placeholder="Silva" placeholderTextColor={E.textMuted} value={newClient.lastName} onChangeText={t => setNewClient({ ...newClient, lastName: t })} />
+                    <TextInput style={styles.input} placeholder={t('jobEdit.lastNamePh')} placeholderTextColor={E.textMuted} value={newClient.lastName} onChangeText={v => setNewClient({ ...newClient, lastName: v })} />
                   </View>
                 </View>
               ) : (
                 <>
                   <Text style={styles.fieldLabel}>Business Name *</Text>
-                  <TextInput style={styles.input} placeholder="Company Lda" placeholderTextColor={E.textMuted} value={newClient.businessName} onChangeText={t => setNewClient({ ...newClient, businessName: t })} />
+                  <TextInput style={styles.input} placeholder={t('jobEdit.businessNamePh')} placeholderTextColor={E.textMuted} value={newClient.businessName} onChangeText={v => setNewClient({ ...newClient, businessName: v })} />
                 </>
               )}
 
-              <Text style={styles.fieldLabel}>NIF (Tax ID)</Text>
+              <Text style={styles.fieldLabel}>{t('jobEdit.nif')}</Text>
               <View style={styles.nifRow}>
                 <View style={styles.nifPrefix}><Text style={styles.nifPrefixText}>PT</Text></View>
-                <TextInput style={[styles.input, { flex: 1 }]} placeholder="123456789" placeholderTextColor={E.textMuted} value={newClient.nif} onChangeText={t => setNewClient({ ...newClient, nif: t.replace(/\D/g, '').slice(0, 9) })} keyboardType="number-pad" maxLength={9} />
+                <TextInput style={[styles.input, { flex: 1 }]} placeholder={t('jobEdit.nifPh')} placeholderTextColor={E.textMuted} value={newClient.nif} onChangeText={v => setNewClient({ ...newClient, nif: v.replace(/\D/g, '').slice(0, 9) })} keyboardType="number-pad" maxLength={9} />
               </View>
 
-              <Text style={styles.fieldLabel}>Phone</Text>
+              <Text style={styles.fieldLabel}>{t('jobEdit.phone')}</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <CountryPicker selected={newCountry} onSelect={setNewCountry} />
-                <TextInput style={[styles.input, { flex: 1 }]} placeholder="912 345 678" placeholderTextColor={E.textMuted} value={newClient.phone} onChangeText={t => setNewClient({ ...newClient, phone: t })} keyboardType="phone-pad" />
+                <TextInput style={[styles.input, { flex: 1 }]} placeholder={t('jobEdit.phonePh')} placeholderTextColor={E.textMuted} value={newClient.phone} onChangeText={v => setNewClient({ ...newClient, phone: v })} keyboardType="phone-pad" />
               </View>
 
-              <Text style={styles.fieldLabel}>Email</Text>
-              <TextInput style={styles.input} placeholder="client@email.com" placeholderTextColor={E.textMuted} value={newClient.email} onChangeText={t => setNewClient({ ...newClient, email: t })} keyboardType="email-address" autoCapitalize="none" />
+              <Text style={styles.fieldLabel}>{t('jobEdit.email')}</Text>
+              <TextInput style={styles.input} placeholder={t('jobEdit.emailPh')} placeholderTextColor={E.textMuted} value={newClient.email} onChangeText={v => setNewClient({ ...newClient, email: v })} keyboardType="email-address" autoCapitalize="none" />
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
                 <TouchableOpacity style={[styles.createClientBtn, { flex: 1 }]} onPress={() => setIsCreatingClient(false)}>
-                  <Text style={[styles.createClientBtnText, { color: E.textMuted }]}>Cancel</Text>
+                  <Text style={[styles.createClientBtnText, { color: E.textMuted }]}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.saveBottomButton, { flex: 2, marginTop: 0, height: 42 }]} onPress={handleCreateClient}>
-                  <Text style={styles.saveBottomButtonText}>Save Client</Text>
+                  <Text style={styles.saveBottomButtonText}>{t('jobEdit.saveClient')}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -502,23 +523,23 @@ export default function JobEditScreen() {
 
         {/* Basic Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Basic Info</Text>
+          <Text style={styles.sectionTitle}>{t('jobEdit.basicInfo')}</Text>
 
-          <Text style={styles.fieldLabel}>Title *</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.titleLabel')}</Text>
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="e.g. Fix leaking pipe"
+            placeholder={t('jobEdit.titlePh')}
             placeholderTextColor='#94a3b8'
           />
 
-          <Text style={styles.fieldLabel}>Description</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.description')}</Text>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Describe the work to be done..."
+            placeholder={t('jobEdit.descPh')}
             placeholderTextColor='#94a3b8'
             multiline
             numberOfLines={4}
@@ -528,11 +549,11 @@ export default function JobEditScreen() {
 
         {/* Category & Priority */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Classification</Text>
+          <Text style={styles.sectionTitle}>{t('jobEdit.classification')}</Text>
 
-          <Text style={styles.fieldLabel}>Category</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.category')}</Text>
           <TouchableOpacity style={styles.picker} onPress={() => setShowCategoryPicker(v => !v)}>
-            <Text style={styles.pickerText}>{category}</Text>
+            <Text style={styles.pickerText}>{t(CATEGORY_T_KEYS[category] || 'jobEdit.categoryGeneral')}</Text>
             <Icon name={showCategoryPicker ? 'chevron-up' : 'chevron-down'} size={20} color='#94a3b8' />
           </TouchableOpacity>
           {showCategoryPicker && (
@@ -542,18 +563,18 @@ export default function JobEditScreen() {
                   key={c}
                   style={[styles.pickerOption, c === category && styles.pickerOptionSelected]}
                   onPress={() => { setCategory(c); setShowCategoryPicker(false); }}>
-                  <Text style={[styles.pickerOptionText, c === category && styles.pickerOptionTextSelected]}>{c}</Text>
+                  <Text style={[styles.pickerOptionText, c === category && styles.pickerOptionTextSelected]}>{t(CATEGORY_T_KEYS[c] || 'jobEdit.categoryGeneral')}</Text>
                   {c === category && <Icon name="check" size={16} color={Colors.tregoBlue} />}
                 </TouchableOpacity>
               ))}
             </View>
           )}
 
-          <Text style={styles.fieldLabel}>Priority</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.priority')}</Text>
           <TouchableOpacity style={styles.picker} onPress={() => setShowPriorityPicker(v => !v)}>
             <View style={styles.priorityRow}>
               <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(priority) }]} />
-              <Text style={styles.pickerText}>{priority.charAt(0).toUpperCase() + priority.slice(1)}</Text>
+              <Text style={styles.pickerText}>{t(PRIORITY_T_KEYS[priority] || 'jobEdit.priorityNormal')}</Text>
             </View>
             <Icon name={showPriorityPicker ? 'chevron-up' : 'chevron-down'} size={20} color='#94a3b8' />
           </TouchableOpacity>
@@ -567,7 +588,7 @@ export default function JobEditScreen() {
                   <View style={styles.priorityRow}>
                     <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(p) }]} />
                     <Text style={[styles.pickerOptionText, p === priority && styles.pickerOptionTextSelected]}>
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                      {t(PRIORITY_T_KEYS[p] || 'jobEdit.priorityNormal')}
                     </Text>
                   </View>
                   {p === priority && <Icon name="check" size={16} color={Colors.tregoBlue} />}
@@ -579,34 +600,34 @@ export default function JobEditScreen() {
 
         {/* Location */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location</Text>
+          <Text style={styles.sectionTitle}>{t('jobEdit.location')}</Text>
 
-          <Text style={styles.fieldLabel}>Address</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.address')}</Text>
           <TextInput
             style={styles.input}
             value={address}
             onChangeText={setAddress}
-            placeholder="Street address"
+            placeholder={t('jobEdit.addressPh')}
             placeholderTextColor='#94a3b8'
           />
 
-          <Text style={styles.fieldLabel}>City / Area</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.city')}</Text>
           <TextInput
             style={styles.input}
             value={location}
             onChangeText={setLocation}
-            placeholder="e.g. Lisboa"
+            placeholder={t('jobEdit.cityPh')}
             placeholderTextColor='#94a3b8'
           />
         </View>
 
         {/* Schedule & Price */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Schedule & Price</Text>
+          <Text style={styles.sectionTitle}>{t('jobEdit.scheduleAndPrice')}</Text>
 
           <View style={styles.row}>
             <View style={styles.rowHalf}>
-              <Text style={styles.fieldLabel}>Date</Text>
+              <Text style={styles.fieldLabel}>{t('jobEdit.date')}</Text>
               <TouchableOpacity style={styles.pickerBtn} onPress={() => {
                 if (scheduledDate) {
                   const [y, m] = scheduledDate.split('-');
@@ -615,28 +636,28 @@ export default function JobEditScreen() {
                 setShowDatePicker(true);
               }}>
                 <Icon name="calendar" size={16} color="#94a3b8" />
-                <Text style={styles.pickerBtnText}>{scheduledDate || 'Select date'}</Text>
+                <Text style={styles.pickerBtnText}>{scheduledDate || t('jobEdit.selectDate')}</Text>
                 <Icon name="chevron-down" size={16} color="#94a3b8" />
               </TouchableOpacity>
             </View>
             <View style={styles.rowHalf}>
-              <Text style={styles.fieldLabel}>Time</Text>
+              <Text style={styles.fieldLabel}>{t('jobEdit.time')}</Text>
               <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowTimePicker(true)}>
                 <Icon name="clock-outline" size={16} color="#94a3b8" />
-                <Text style={styles.pickerBtnText}>{scheduledTime || 'Select time'}</Text>
+                <Text style={styles.pickerBtnText}>{scheduledTime || t('jobEdit.selectTime')}</Text>
                 <Icon name="chevron-down" size={16} color="#94a3b8" />
               </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.fieldLabel}>Duration</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.duration')}</Text>
           <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowDurationPicker(true)}>
             <Icon name="clock-outline" size={16} color="#94a3b8" />
-            <Text style={styles.pickerBtnText}>{durationMinutes} min</Text>
+            <Text style={styles.pickerBtnText}>{t('jobEdit.durationMin', { n: durationMinutes })}</Text>
             <Icon name="chevron-down" size={16} color="#94a3b8" />
           </TouchableOpacity>
 
-          <Text style={styles.fieldLabel}>Price (€)</Text>
+          <Text style={styles.fieldLabel}>{t('jobEdit.price')}</Text>
           <View style={styles.priceInput}>
             <Text style={styles.priceSymbol}>€</Text>
             <TextInput
@@ -652,12 +673,12 @@ export default function JobEditScreen() {
 
         {/* Notes */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notes</Text>
+          <Text style={styles.sectionTitle}>{t('jobEdit.notes')}</Text>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Internal notes, special instructions..."
+            placeholder={t('jobEdit.notesPh')}
             placeholderTextColor='#94a3b8'
             multiline
             numberOfLines={3}
@@ -673,7 +694,7 @@ export default function JobEditScreen() {
           {saving ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.saveBottomButtonText}>Save Changes</Text>
+            <Text style={styles.saveBottomButtonText}>{t('jobEdit.saveChanges')}</Text>
           )}
         </TouchableOpacity>
 
@@ -684,7 +705,7 @@ export default function JobEditScreen() {
       <Modal visible={showDatePicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.pickerModal}>
-            <Text style={styles.pickerModalTitle}>Select Date</Text>
+            <Text style={styles.pickerModalTitle}>{t('jobEdit.selectDateTitle')}</Text>
             <View style={styles.monthYearRow}>
               {MONTHS.map((m, i) => (
                 <TouchableOpacity key={m} onPress={() => setPickerMonth(i)}
@@ -717,7 +738,7 @@ export default function JobEditScreen() {
               }}
             />
             <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setShowDatePicker(false)}>
-              <Text style={styles.pickerCancelText}>Cancel</Text>
+              <Text style={styles.pickerCancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -727,7 +748,7 @@ export default function JobEditScreen() {
       <Modal visible={showTimePicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.pickerModal}>
-            <Text style={styles.pickerModalTitle}>Select Time</Text>
+            <Text style={styles.pickerModalTitle}>{t('jobEdit.selectTimeTitle')}</Text>
             <View style={styles.timePickerRow}>
               <FlatList
                 data={HOURS}
@@ -772,7 +793,7 @@ export default function JobEditScreen() {
               />
             </View>
             <TouchableOpacity style={styles.pickerConfirmBtn} onPress={() => setShowTimePicker(false)}>
-              <Text style={styles.pickerConfirmText}>Confirm</Text>
+              <Text style={styles.pickerConfirmText}>{t('jobEdit.confirm')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -782,7 +803,7 @@ export default function JobEditScreen() {
       <Modal visible={showDurationPicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.pickerModal}>
-            <Text style={styles.pickerModalTitle}>Select Duration</Text>
+            <Text style={styles.pickerModalTitle}>{t('jobEdit.selectDurationTitle')}</Text>
             <FlatList
               data={DURATION_OPTIONS}
               numColumns={3}
@@ -799,7 +820,7 @@ export default function JobEditScreen() {
               }}
             />
             <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setShowDurationPicker(false)}>
-              <Text style={styles.pickerCancelText}>Cancel</Text>
+              <Text style={styles.pickerCancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>

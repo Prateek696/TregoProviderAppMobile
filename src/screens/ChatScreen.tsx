@@ -21,6 +21,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StartupOrb } from '../components/StartupOrb';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
 import ChatTutorialModal from '../components/modals/ChatTutorialModal';
+import { useTranslation } from 'react-i18next';
 
 interface Message {
   id: string;
@@ -40,6 +41,7 @@ interface QuickReply {
 }
 
 export default function ChatScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -78,16 +80,16 @@ export default function ChatScreen() {
 
         const welcomeMessage: Message = {
           id: `welcome-${Date.now()}`,
-          text: `Hi **${firstName}**! I'm **${assistantName}**, your AI assistant. I'm here to help manage your jobs, connect with clients, and optimize your workflow. What would you like to do?`,
+          text: t('chat.welcome', { firstName, assistantName }),
           isBot: true,
           timestamp: new Date(),
           isAnimating: false,
           showQuickReplies: true,
           quickReplies: [
-            { id: '1', text: 'Testing Menu', value: 'testing_menu', color: 'blue' },
-            { id: '2', text: 'Hamburger Menu', value: 'hamburger_menu', color: 'gray' },
-            { id: '3', text: 'Marketing', value: 'marketing_menu', color: 'purple' },
-            { id: '4', text: 'Learn', value: 'learn_menu', color: 'emerald' },
+            { id: '1', text: t('chat.testingMenu'), value: 'testing_menu', color: 'blue' },
+            { id: '2', text: t('chat.hamburgerMenu'), value: 'hamburger_menu', color: 'gray' },
+            { id: '3', text: t('chat.marketing'), value: 'marketing_menu', color: 'purple' },
+            { id: '4', text: t('chat.learn'), value: 'learn_menu', color: 'emerald' },
           ],
         };
 
@@ -118,14 +120,14 @@ export default function ChatScreen() {
     setTimeout(() => {
       const botResponse: Message = {
         id: `bot-${Date.now()}`,
-        text: `I understand you said "${messageText}". How can I help you with your provider tasks today?`,
+        text: t('chat.botResponse', { text: messageText }),
         isBot: true,
         timestamp: new Date(),
         isAnimating: false,
         showQuickReplies: true,
         quickReplies: [
-          { id: '1', text: 'Show Jobs', value: 'show_jobs', color: 'blue' },
-          { id: '2', text: 'Main Menu', value: 'main_menu', color: 'gray' },
+          { id: '1', text: t('chat.showJobs'), value: 'show_jobs', color: 'blue' },
+          { id: '2', text: t('chat.mainMenu'), value: 'main_menu', color: 'gray' },
         ],
       };
 
@@ -242,7 +244,7 @@ export default function ChatScreen() {
         showsVerticalScrollIndicator={false}>
         {messages.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>Ready to chat!</Text>
+            <Text style={styles.emptyStateText}>{t('chat.readyToChat')}</Text>
           </View>
         ) : (
           messages.map((message) => (
@@ -331,7 +333,7 @@ export default function ChatScreen() {
                   <Animated.View style={[styles.typingDot, { opacity: typingDot2 }]} />
                   <Animated.View style={[styles.typingDot, { opacity: typingDot3 }]} />
                 </View>
-                <Text style={styles.typingText}>typing...</Text>
+                <Text style={styles.typingText}>{t('chat.typing')}</Text>
               </View>
             </View>
           </View>
@@ -344,7 +346,7 @@ export default function ChatScreen() {
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
-          placeholder="Type your message..."
+          placeholder={t('chat.typeMessage')}
           placeholderTextColor="#9ca3af"
           value={inputText}
           onChangeText={setInputText}

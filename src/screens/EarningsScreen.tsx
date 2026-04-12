@@ -17,10 +17,14 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/types';
 import { Colors } from '../shared/constants/colors';
 import { jobsAPI } from '../services/api';
+import LanguageToggle from '../components/LanguageToggle';
+import { EarningsScreenSkeleton } from '../components/ui/Skeleton';
+import { useTranslation } from 'react-i18next';
 
 type EarningsNav = NativeStackNavigationProp<MainStackParamList>;
 
 export default function EarningsScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<EarningsNav>();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<{
@@ -64,20 +68,19 @@ export default function EarningsScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Earnings</Text>
+        <Text style={styles.headerTitle}>{t('earnings.title')}</Text>
+        <View style={{ marginLeft: 'auto' }}><LanguageToggle /></View>
         {loading && <ActivityIndicator size="small" color={Colors.tregoBlue} />}
       </View>
 
       {loading && !data ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.tregoBlue} />
-        </View>
+        <EarningsScreenSkeleton />
       ) : !data ? (
         <View style={styles.center}>
           <Icon name="alert-circle-outline" size={48} color={Colors.mutedForeground} />
-          <Text style={styles.emptyText}>Could not load earnings</Text>
+          <Text style={styles.emptyText}>{t('earnings.loadError')}</Text>
           <TouchableOpacity onPress={loadEarnings} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -86,30 +89,30 @@ export default function EarningsScreen() {
           {/* Summary cards */}
           <View style={styles.row}>
             <View style={[styles.summaryCard, { flex: 1 }]}>
-              <Text style={styles.summaryLabel}>Total Earned</Text>
+              <Text style={styles.summaryLabel}>{t('earnings.totalEarned')}</Text>
               <Text style={styles.summaryValue}>{fmt(data.total_earned)}</Text>
-              <Text style={styles.summarySubLabel}>all time</Text>
+              <Text style={styles.summarySubLabel}>{t('earnings.allTime')}</Text>
             </View>
             <View style={[styles.summaryCard, { flex: 1 }]}>
-              <Text style={styles.summaryLabel}>This Month</Text>
+              <Text style={styles.summaryLabel}>{t('earnings.thisMonth')}</Text>
               <Text style={[styles.summaryValue, { color: Colors.tregoBlue }]}>{fmt(data.this_month)}</Text>
               {monthChange !== null && (
                 <Text style={[styles.summarySubLabel, { color: parseFloat(monthChange) >= 0 ? '#10b981' : '#ef4444' }]}>
-                  {parseFloat(monthChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(monthChange))}% vs last month
+                  {parseFloat(monthChange) >= 0 ? '↑' : '↓'} {Math.abs(parseFloat(monthChange))}% {t('earnings.vsLastMonth')}
                 </Text>
               )}
             </View>
           </View>
 
           <View style={[styles.summaryCard, { marginBottom: 16 }]}>
-            <Text style={styles.summaryLabel}>Last Month</Text>
+            <Text style={styles.summaryLabel}>{t('earnings.lastMonth')}</Text>
             <Text style={styles.summaryValue}>{fmt(data.last_month)}</Text>
           </View>
 
           {/* Monthly bar chart */}
           {data.monthly_breakdown.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Last 6 Months</Text>
+              <Text style={styles.sectionTitle}>{t('earnings.last6Months')}</Text>
               <View style={styles.barChart}>
                 {data.monthly_breakdown.map((m, i) => (
                   <View key={i} style={styles.barCol}>
@@ -128,7 +131,7 @@ export default function EarningsScreen() {
           {/* Recent completed jobs */}
           {data.recent_jobs.length > 0 ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recent Payments</Text>
+              <Text style={styles.sectionTitle}>{t('earnings.recentPayments')}</Text>
               {data.recent_jobs.map(job => (
                 <TouchableOpacity
                   key={job.id}
@@ -140,7 +143,7 @@ export default function EarningsScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.jobTitle} numberOfLines={1}>{job.title}</Text>
-                      <Text style={styles.jobClient}>{job.client_name || 'No client'}</Text>
+                      <Text style={styles.jobClient}>{job.client_name || t('earnings.noClient')}</Text>
                       {job.completed_at && (
                         <Text style={styles.jobDate}>
                           {new Date(job.completed_at).toLocaleDateString('pt-PT')}
@@ -155,8 +158,8 @@ export default function EarningsScreen() {
           ) : (
             <View style={styles.empty}>
               <Icon name="cash-remove" size={48} color={Colors.mutedForeground} />
-              <Text style={styles.emptyText}>No completed jobs yet</Text>
-              <Text style={styles.emptySubText}>Complete jobs to see your earnings here</Text>
+              <Text style={styles.emptyText}>{t('earnings.noJobsTitle')}</Text>
+              <Text style={styles.emptySubText}>{t('earnings.noJobsSubtitle')}</Text>
             </View>
           )}
 

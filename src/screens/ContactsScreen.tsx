@@ -2,12 +2,14 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, Animated, Linking, Platform,
-  PermissionsAndroid, StatusBar,
+  PermissionsAndroid, StatusBar, Modal, ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Contacts from 'react-native-contacts';
 import { contactsAPI } from '../services/api';
+import LanguageToggle from '../components/LanguageToggle';
+import { useTranslation } from 'react-i18next';
 import { storage } from '../shared/storage';
 
 const D = {
@@ -63,6 +65,7 @@ function PermissionPrompt({
   onAllow: () => void;
   onNotNow: () => void;
 }) {
+  const { t } = useTranslation();
   const slideY = useRef(new Animated.Value(-260)).current;
 
   useEffect(() => {
@@ -84,17 +87,17 @@ function PermissionPrompt({
         </View>
       </View>
 
-      <Text style={styles.promptTitle}>Access Your Contacts</Text>
+      <Text style={styles.promptTitle}>{t('clients.accessTitle')}</Text>
       <Text style={styles.promptDesc}>
         {isPermanentDeny
-          ? 'Contact access was denied. Please enable it in Settings to import your clients.'
-          : 'Allow access to your contacts to quickly add and manage clients.'}
+          ? t('clients.accessDenied')
+          : t('clients.accessMessage')}
       </Text>
 
       {isPermanentDeny ? (
         <TouchableOpacity style={styles.promptBtnPrimary} onPress={() => Linking.openSettings()}>
           <Icon name="cog-outline" size={18} color="#fff" />
-          <Text style={styles.promptBtnPrimaryText}>Open Settings</Text>
+          <Text style={styles.promptBtnPrimaryText}>{t('common.openSettings')}</Text>
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
@@ -103,12 +106,12 @@ function PermissionPrompt({
           disabled={importing}>
           {importing
             ? <ActivityIndicator color="#fff" size="small" />
-            : <><Icon name="shield-check-outline" size={18} color="#fff" /><Text style={styles.promptBtnPrimaryText}>Allow Access</Text></>}
+            : <><Icon name="shield-check-outline" size={18} color="#fff" /><Text style={styles.promptBtnPrimaryText}>{t('clients.allowAccess')}</Text></>}
         </TouchableOpacity>
       )}
 
       <TouchableOpacity style={styles.promptBtnSecondary} onPress={onNotNow}>
-        <Text style={styles.promptBtnSecondaryText}>Not Now</Text>
+        <Text style={styles.promptBtnSecondaryText}>{t('common.notNow')}</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -116,6 +119,7 @@ function PermissionPrompt({
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ContactsScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
 
   const [contacts, setContacts]     = useState<TregoContact[]>([]);
@@ -173,10 +177,10 @@ export default function ContactsScreen() {
       const result = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
         {
-          title: 'Access Your Contacts',
-          message: 'Allow Trego to access your contacts to quickly add and manage clients.',
-          buttonPositive: 'Allow',
-          buttonNegative: 'Deny',
+          title: t('clients.accessTitle'),
+          message: t('clients.androidPermMessage'),
+          buttonPositive: t('common.allow'),
+          buttonNegative: t('common.deny'),
         }
       );
 
@@ -216,22 +220,68 @@ export default function ContactsScreen() {
     // Prompt will reappear next time tab is opened
   };
 
+  // Contact picker state
+  const [showPicker, setShowPicker] = useState(false);
+  const [phoneContacts, setPhoneContacts] = useState<any[]>([]);
+  const [selected, setSelected] = useState<Record<string, 'individual' | 'business'>>({});
+  const [pickerSearch, setPickerSearch] = useState('');
+
   const importContacts = async () => {
     try {
       setImporting(true);
-      const phoneContacts = await Contacts.getAll();
-      const payload = phoneContacts
+      const all = await Contacts.getAll();
+      const mapped = all
         .filter(c => c.displayName || (c.givenName && c.familyName))
         .map(c => ({
+          id: c.recordID,
           name: c.displayName || `${c.givenName || ''} ${c.familyName || ''}`.trim(),
+          phone: c.phoneNumbers?.[0]?.number || '',
           phones: c.phoneNumbers.map(p => ({ number: p.number, label: p.label })),
           emails: c.emailAddresses.map(e => ({ email: e.email, label: e.label })),
-          source_contact_id: c.recordID,
-        }));
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setPhoneContacts(mapped);
+      setSelected({});
+      setPickerSearch('');
+      setShowPicker(true);
+    } catch (err) {
+      console.error('Import contacts error:', err);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const toggleContact = (id: string, type: 'individual' | 'business') => {
+    setSelected(prev => {
+      const copy = { ...prev };
+      if (copy[id] === type) { delete copy[id]; } // deselect
+      else { copy[id] = type; }
+      return copy;
+    });
+  };
+
+  const confirmImport = async () => {
+    const selectedIds = Object.keys(selected);
+    if (selectedIds.length === 0) { setShowPicker(false); return; }
+
+    setImporting(true);
+    setShowPicker(false);
+
+    const payload = phoneContacts
+      .filter(c => selectedIds.includes(c.id))
+      .map(c => ({
+        name: c.name,
+        phones: c.phones,
+        emails: c.emails,
+        source_contact_id: c.id,
+        client_type: selected[c.id], // 'individual' or 'business'
+      }));
+
+    try {
       await contactsAPI.sync(payload);
       await loadContacts();
     } catch (err) {
-      console.error('Import contacts error:', err);
+      console.error('Import error:', err);
     } finally {
       setImporting(false);
     }
@@ -308,15 +358,16 @@ export default function ContactsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={D.bg} />
+      <StatusBar hidden={true} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Clients</Text>
+        <Text style={styles.headerTitle}>{t('clients.title')}</Text>
+        <View style={{ marginLeft: 'auto', marginRight: 8 }}><LanguageToggle /></View>
         {importing && (
           <View style={styles.importingBadge}>
             <ActivityIndicator size="small" color={D.blue} />
-            <Text style={styles.importingText}>Importing…</Text>
+            <Text style={styles.importingText}>{t('common.loading')}</Text>
           </View>
         )}
       </View>
@@ -331,21 +382,34 @@ export default function ContactsScreen() {
         />
       )}
 
-      {/* ── Search ── */}
-      <View style={styles.searchBar}>
-        <Icon name="magnify" size={20} color={D.textMuted} style={{ marginRight: 8 }} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search clients..."
-          placeholderTextColor={D.textMuted}
-          value={search}
-          onChangeText={handleSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => handleSearch('')}>
-            <Icon name="close" size={18} color={D.textMuted} />
-          </TouchableOpacity>
-        )}
+      {/* ── Search + Import row ── */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, marginBottom: 8 }}>
+        <View style={[styles.searchBar, { flex: 1, marginHorizontal: 0 }]}>
+          <Icon name="magnify" size={20} color={D.textMuted} style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={t('clients.searchPlaceholder')}
+            placeholderTextColor={D.textMuted}
+            value={search}
+            onChangeText={handleSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => handleSearch('')}>
+              <Icon name="close" size={18} color={D.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          onPress={handleAllow}
+          disabled={importing}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6,
+            backgroundColor: D.blue, paddingHorizontal: 12, paddingVertical: 10,
+            borderRadius: 10, opacity: importing ? 0.6 : 1,
+          }}>
+          <Icon name="account-plus" size={16} color="#fff" />
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>{t('clients.import')}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Content ── */}
@@ -356,11 +420,11 @@ export default function ContactsScreen() {
       ) : filtered.length === 0 ? (
         <View style={styles.center}>
           <Icon name="account-group-outline" size={52} color={D.textMuted} />
-          <Text style={styles.emptyTitle}>{search ? 'No clients found' : 'No clients yet'}</Text>
+          <Text style={styles.emptyTitle}>{search ? t('common.noData') : t('clients.noClients')}</Text>
           <Text style={styles.emptyDesc}>
             {search
-              ? 'Try a different name, phone, or email.'
-              : 'Allow contact access to import your clients automatically.'}
+              ? t('clients.tryDifferentSearch')
+              : t('clients.allowImportPrompt')}
           </Text>
         </View>
       ) : (
@@ -372,6 +436,80 @@ export default function ContactsScreen() {
           contentContainerStyle={{ paddingBottom: 40 }}
         />
       )}
+
+      {/* ── Contact Picker Modal ── */}
+      <Modal visible={showPicker} animationType="slide" onRequestClose={() => setShowPicker(false)}>
+        <View style={{ flex: 1, backgroundColor: D.bg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, paddingTop: 20, borderBottomWidth: 1, borderBottomColor: D.border }}>
+            <TouchableOpacity onPress={() => setShowPicker(false)} style={{ padding: 8 }}>
+              <Icon name="arrow-left" size={24} color={D.text} />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, color: D.text, fontSize: 18, fontWeight: '600', marginLeft: 8 }}>{t('clients.selectClients')}</Text>
+            <TouchableOpacity
+              onPress={confirmImport}
+              style={{ backgroundColor: D.green, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+              <Text style={{ color: '#fff', fontWeight: '600' }}>
+                {t('clients.importCount', { count: Object.keys(selected).length })}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+            <TextInput
+              style={{ backgroundColor: D.surface, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, color: D.text, fontSize: 14 }}
+              placeholder={t('clients.searchContacts')}
+              placeholderTextColor={D.textMuted}
+              value={pickerSearch}
+              onChangeText={setPickerSearch}
+            />
+          </View>
+
+          <Text style={{ color: D.textMuted, fontSize: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
+            {t('clients.tapToMark')}
+          </Text>
+
+          <FlatList
+            data={phoneContacts.filter(c =>
+              !pickerSearch || c.name.toLowerCase().includes(pickerSearch.toLowerCase()) || c.phone?.includes(pickerSearch)
+            )}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => {
+              const sel = selected[item.id];
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: D.border }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: sel ? (sel === 'business' ? '#7c3aed' : D.blue) : D.surface, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                    <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>
+                      {item.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: D.text, fontSize: 14, fontWeight: '500' }}>{item.name}</Text>
+                    {item.phone ? <Text style={{ color: D.textSub, fontSize: 12 }}>{item.phone}</Text> : null}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => toggleContact(item.id, 'individual')}
+                    style={{
+                      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, marginRight: 6,
+                      backgroundColor: sel === 'individual' ? D.blue : D.surface,
+                      borderWidth: 1, borderColor: sel === 'individual' ? D.blue : D.border,
+                    }}>
+                    <Text style={{ color: sel === 'individual' ? '#fff' : D.textSub, fontSize: 11, fontWeight: '600' }}>{t('clients.client')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => toggleContact(item.id, 'business')}
+                    style={{
+                      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,
+                      backgroundColor: sel === 'business' ? '#7c3aed' : D.surface,
+                      borderWidth: 1, borderColor: sel === 'business' ? '#7c3aed' : D.border,
+                    }}>
+                    <Text style={{ color: sel === 'business' ? '#fff' : D.textSub, fontSize: 11, fontWeight: '600' }}>{t('clients.business')}</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -1,6 +1,5 @@
 package com.tregoproviderapp
 
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
@@ -13,29 +12,26 @@ class TregoNotificationModule(private val reactContext: ReactApplicationContext)
     ReactContextBaseJavaModule(reactContext) {
 
     companion object {
-        const val CHANNEL_ID          = "trego_jobs_v4"
-        const val NOTIFICATION_ID     = 1001
-        const val ACTION_RECORD_VOICE = "com.tregoproviderapp.ACTION_RECORD_VOICE"
-        const val ACTION_RECORD_TEXT  = "com.tregoproviderapp.ACTION_RECORD_TEXT"
-        const val ACTION_RECORD_JOB   = ACTION_RECORD_VOICE
-        const val REMOTE_INPUT_KEY    = "text_input"
+        const val CHANNEL_ID               = "trego_jobs_v7"
+        const val NOTIFICATION_ID          = 1001
 
-        fun updateNotificationAfterText(context: Context, submittedText: String) {
-            val nm = NotificationManagerCompat.from(context)
+        // Notification button actions — all handled by TregoActionReceiver via getBroadcast()
+        const val ACTION_RECORD_VOICE      = "com.tregoproviderapp.ACTION_RECORD_VOICE"
+        const val ACTION_RECORD_TEXT       = "com.tregoproviderapp.ACTION_RECORD_TEXT"
+        const val ACTION_SHOW_TEXT_MODE    = "com.tregoproviderapp.ACTION_SHOW_TEXT_MODE"
+        const val ACTION_SUBMIT_TEXT       = "com.tregoproviderapp.ACTION_SUBMIT_TEXT"
+        const val ACTION_CANCEL_TEXT       = "com.tregoproviderapp.ACTION_CANCEL_TEXT"
+        const val ACTION_DONE_RECORDING    = "com.tregoproviderapp.ACTION_DONE_RECORDING"
+        const val ACTION_CANCEL_RECORDING  = "com.tregoproviderapp.ACTION_CANCEL_RECORDING"
+        const val ACTION_CONFIRM_JOB       = "com.tregoproviderapp.ACTION_CONFIRM_JOB"
+        const val ACTION_REDO_RECORDING    = "com.tregoproviderapp.ACTION_REDO_RECORDING"
+        const val ACTION_NOTIF_DISMISSED   = "com.tregoproviderapp.ACTION_NOTIF_DISMISSED"
 
-            // 1. Re-post the persistent notification with same ID to clear the RemoteInput spinner
-            nm.notify(NOTIFICATION_ID, TregoPersistentService.buildNotification(context))
+        // Aliases kept for back-compat
+        const val ACTION_RECORD_JOB        = ACTION_RECORD_VOICE
 
-            // 2. Post a brief "Job logged!" confirmation notification
-            val logged = androidx.core.app.NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Job logged!")
-                .setContentText("\"${submittedText.take(60)}\"")
-                .setAutoCancel(true)
-                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
-                .build()
-            nm.notify(NOTIFICATION_ID + 10, logged)
-        }
+        const val REMOTE_INPUT_KEY         = "text_input"
+        const val PREFS_PENDING_TEXT       = "pending_raw_text"
     }
 
     override fun getName(): String = "TregoNotification"
@@ -66,7 +62,34 @@ class TregoNotificationModule(private val reactContext: ReactApplicationContext)
         NotificationManagerCompat.from(reactContext).cancel(NOTIFICATION_ID)
     }
 
-    // Required by NativeEventEmitter on JS side
+    @ReactMethod
+    fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Only ask once — track with SharedPreferences
+            val prefs = reactContext.getSharedPreferences("trego_prefs", android.content.Context.MODE_PRIVATE)
+            if (prefs.getBoolean("battery_opt_asked", false)) return
+
+            val pm = reactContext.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(reactContext.packageName)) {
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = android.net.Uri.parse("package:${reactContext.packageName}")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    reactContext.startActivity(intent)
+                } catch (_: Exception) {}
+            }
+            // Mark as asked regardless of user choice
+            prefs.edit().putBoolean("battery_opt_asked", true).apply()
+        }
+    }
+
+    @ReactMethod
+    fun setPostCallThreshold(seconds: Int) {
+        reactContext.getSharedPreferences("trego_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().putInt("post_call_threshold", seconds).apply()
+    }
+
     @ReactMethod fun addListener(eventName: String) {}
     @ReactMethod fun removeListeners(count: Int) {}
 
@@ -75,6 +98,6 @@ class TregoNotificationModule(private val reactContext: ReactApplicationContext)
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit(eventName, null)
-        } catch (_: Exception) { }
+        } catch (_: Exception) {}
     }
 }

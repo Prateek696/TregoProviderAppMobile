@@ -11,6 +11,7 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 interface CompleteSetupScreenProps {
   orbColor?: string;
@@ -25,6 +26,7 @@ export default function CompleteSetupScreen({
   assistantName,
   onComplete,
 }: CompleteSetupScreenProps) {
+  const { t } = useTranslation();
   const scaleAnim = React.useRef(new Animated.Value(0.3)).current;
   const opacityAnim = React.useRef(new Animated.Value(0)).current;
   const ring1Anim = React.useRef(new Animated.Value(0.8)).current;
@@ -143,12 +145,11 @@ export default function CompleteSetupScreen({
               opacity: opacityAnim,
             },
           ]}>
-          <Text style={styles.title}>Setup Complete!</Text>
+          <Text style={styles.title}>{t('completeSetup.title')}</Text>
           <Text style={styles.subtitle}>
-            Welcome to <Text style={styles.bold}>trego</Text>,{' '}
+            {t('completeSetup.welcome')} <Text style={styles.bold}>{t('completeSetup.brand')}</Text>,{' '}
             <Text style={styles.bold}>{firstName}</Text>.{' '}
-            <Text style={styles.bold}>{assistantName}</Text> is ready to help you
-            manage your business.
+            <Text style={styles.bold}>{assistantName}</Text> {t('completeSetup.ready')}
           </Text>
         </Animated.View>
 
@@ -161,7 +162,7 @@ export default function CompleteSetupScreen({
             },
           ]}>
           <ActivityIndicator size="small" color="#10b981" />
-          <Text style={styles.loadingText}>Opening your workspace...</Text>
+          <Text style={styles.loadingText}>{t('completeSetup.loading')}</Text>
         </Animated.View>
       </View>
     </View>

@@ -16,6 +16,7 @@ import {
 import { Button } from '../ui/Button';
 import { Label } from '../ui/Label';
 import { Colors } from '../../shared/constants/colors';
+import { useTranslation } from 'react-i18next';
 
 interface CancelJobModalProps {
   visible: boolean;
@@ -30,6 +31,7 @@ export function CancelJobModal({
   onConfirm,
   jobTitle,
 }: CancelJobModalProps) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
 
   const handleConfirm = () => {
@@ -55,19 +57,19 @@ export function CancelJobModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.container}>
           <View style={styles.modal}>
-            <Text style={styles.title}>Cancel Job</Text>
+            <Text style={styles.title}>{t('modals.cancel.title')}</Text>
             {jobTitle && (
               <Text style={styles.subtitle}>{jobTitle}</Text>
             )}
             <Text style={styles.description}>
-              Please provide a reason for cancelling this job.
+              {t('modals.cancel.description')}
             </Text>
 
             <View style={styles.inputContainer}>
-              <Label required>Reason</Label>
+              <Label required>{t('modals.cancel.reasonLabel')}</Label>
               <TextInput
                 style={styles.input}
-                placeholder="Enter cancellation reason..."
+                placeholder={t('modals.cancel.reasonPlaceholder')}
                 value={reason}
                 onChangeText={setReason}
                 multiline
@@ -78,13 +80,13 @@ export function CancelJobModal({
 
             <View style={styles.actions}>
               <Button
-                title="Cancel"
+                title={t('common.cancel')}
                 variant="outline"
                 onPress={handleClose}
                 style={styles.button}
               />
               <Button
-                title="Confirm Cancellation"
+                title={t('modals.cancel.confirmBtn')}
                 onPress={handleConfirm}
                 disabled={!reason.trim()}
                 variant="destructive"

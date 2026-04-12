@@ -20,6 +20,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { MainStackParamList } from '../navigation/types';
 import { StartupOrb } from '../components/StartupOrb';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
+import { useTranslation } from 'react-i18next';
 
 type ChatListScreenNavigationProp = NativeStackNavigationProp<MainStackParamList, 'ChatList'>;
 
@@ -42,6 +43,7 @@ interface Chat {
 }
 
 export default function ChatListScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<ChatListScreenNavigationProp>();
   const [searchQuery, setSearchQuery] = useState('');
   const [chats, setChats] = useState<Chat[]>([]);
@@ -62,7 +64,7 @@ export default function ChatListScreen() {
         {
           id: 'ai-assistant',
           name: profile?.assistantName || 'Sage',
-          lastMessage: 'Great work on the kitchen installation today! I\'ve updated your availability for tomorrow. Ready for the next challenge?',
+          lastMessage: t('chat.lastMessage1'),
           lastMessageTime: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
           unreadCount: 0,
           isOnline: true,
@@ -73,7 +75,7 @@ export default function ChatListScreen() {
         {
           id: 'trego-support',
           name: 'Trego Support',
-          lastMessage: 'Response time on the Basic Plan can take up to 48h. For faster support, consider upgrading to Pro.',
+          lastMessage: t('chat.supportMessage'),
           lastMessageTime: new Date(Date.now() - 1000 * 60 * 10), // 10 minutes ago
           unreadCount: 1,
           isOnline: true,
@@ -86,7 +88,7 @@ export default function ChatListScreen() {
           id: 'lisboa-residence-hotel',
           name: 'Lisboa Residence Hotel',
           avatar: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=150&h=150&fit=crop&crop=center',
-          lastMessage: 'We need urgent HVAC maintenance for our penthouse suite. Available today?',
+          lastMessage: t('chat.mockClient1'),
           lastMessageTime: new Date(Date.now() - 1000 * 60 * 15), // 15 minutes ago
           unreadCount: 3,
           isOnline: true,
@@ -101,7 +103,7 @@ export default function ChatListScreen() {
           id: 'maria-santos',
           name: 'Maria Santos',
           avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=center',
-          lastMessage: 'Thank you so much! The bathroom looks amazing. When can we schedule the kitchen?',
+          lastMessage: t('chat.mockClient2'),
           lastMessageTime: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
           unreadCount: 2,
           isOnline: false,
@@ -116,7 +118,7 @@ export default function ChatListScreen() {
           id: 'riverside-apartments',
           name: 'Riverside Apartments',
           avatar: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=150&h=150&fit=crop&crop=center',
-          lastMessage: 'Can you handle the lighting fixtures for units 4A and 4B this week?',
+          lastMessage: t('chat.mockClient3'),
           lastMessageTime: new Date(Date.now() - 1000 * 60 * 45), // 45 minutes ago
           unreadCount: 1,
           isOnline: true,
@@ -131,7 +133,7 @@ export default function ChatListScreen() {
           id: 'pedro-almeida',
           name: 'Pedro Almeida',
           avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=center',
-          lastMessage: 'The air conditioning is working great now. Thanks!',
+          lastMessage: t('chat.mockClient4'),
           lastMessageTime: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
           unreadCount: 1,
           isOnline: true,
@@ -146,7 +148,7 @@ export default function ChatListScreen() {
           id: 'central-coworking-hub',
           name: 'Central Coworking Hub',
           avatar: 'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=150&h=150&fit=crop&crop=center',
-          lastMessage: 'The networking setup looks perfect! Payment sent. Looking forward to our next project.',
+          lastMessage: t('chat.mockClient5'),
           lastMessageTime: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
           unreadCount: 3,
           isOnline: false,

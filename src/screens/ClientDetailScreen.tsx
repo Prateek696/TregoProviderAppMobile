@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { contactsAPI, getAPIError } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const D = {
   bg: '#0f172a', surface: '#1e293b', border: '#334155',
@@ -17,6 +18,7 @@ interface TregoContact {
 }
 
 export default function ClientDetailScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const contact: TregoContact = route.params?.contact;
@@ -39,7 +41,7 @@ export default function ClientDetailScreen() {
   const avatarColor = AVATAR_COLORS[(contact?.name || '').charCodeAt(0) % AVATAR_COLORS.length];
 
   const handleSave = async () => {
-    if (!name.trim()) { Alert.alert('Name is required'); return; }
+    if (!name.trim()) { Alert.alert(t('clientDetail.nameRequired')); return; }
     try {
       setSaving(true);
       await contactsAPI.update(contact.id, {
@@ -51,7 +53,7 @@ export default function ClientDetailScreen() {
       });
       setEditing(false);
     } catch (err) {
-      Alert.alert('Save Failed', getAPIError(err));
+      Alert.alert(t('clientDetail.saveFailed'), getAPIError(err));
     } finally {
       setSaving(false);
     }
@@ -107,23 +109,23 @@ export default function ClientDetailScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={22} color={D.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Client</Text>
+        <Text style={styles.headerTitle}>{t('clientDetail.title')}</Text>
         {editing ? (
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{t('clientDetail.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
               {saving
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.saveText}>Save</Text>
+                : <Text style={styles.saveText}>{t('clientDetail.save')}</Text>
               }
             </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
             <Icon name="pencil" size={18} color={D.blue} />
-            <Text style={styles.editText}>Edit</Text>
+            <Text style={styles.editText}>{t('clientDetail.edit')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -139,7 +141,7 @@ export default function ClientDetailScreen() {
               style={styles.nameInput}
               value={name}
               onChangeText={setName}
-              placeholder="Full name"
+              placeholder={t('clientDetail.fullNamePh')}
               placeholderTextColor={D.textMuted}
               autoCapitalize="words"
             />
@@ -150,15 +152,15 @@ export default function ClientDetailScreen() {
 
         {/* Fields */}
         <View style={styles.card}>
-          <Field label="Phone" value={phone} onChange={setPhone} icon="phone" placeholder="No phone" keyboardType="phone-pad" />
+          <Field label={t('clientDetail.phoneLabel')} value={phone} onChange={setPhone} icon="phone" placeholder={t('clientDetail.noPhone')} keyboardType="phone-pad" />
           <View style={styles.divider} />
-          <Field label="Email" value={email} onChange={setEmail} icon="email" placeholder="No email" keyboardType="email-address" />
+          <Field label={t('clientDetail.emailLabel')} value={email} onChange={setEmail} icon="email" placeholder={t('clientDetail.noEmail')} keyboardType="email-address" />
           <View style={styles.divider} />
-          <Field label="NIF" value={nif} onChange={setNif} icon="card-account-details" placeholder="No NIF" keyboardType="number-pad" />
+          <Field label={t('clientDetail.nifLabel')} value={nif} onChange={setNif} icon="card-account-details" placeholder={t('clientDetail.noNif')} keyboardType="number-pad" />
         </View>
 
         <View style={styles.card}>
-          <Field label="Notes" value={notes} onChange={setNotes} icon="note-text" placeholder="No notes" multiline />
+          <Field label={t('clientDetail.notesLabel')} value={notes} onChange={setNotes} icon="note-text" placeholder={t('clientDetail.noNotes')} multiline />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
