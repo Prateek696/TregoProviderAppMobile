@@ -10,9 +10,12 @@ const profileRouter = require('./routes/profile');
 const contactsRouter = require('./routes/contacts');
 const whatsappRouter = require('./routes/whatsapp');
 const invoicesRouter = require('./routes/invoices');
+const adminRouter = require('./routes/admin');
+const feedbackRouter = require('./routes/feedback');
 
 const pool = require('./db');
 const { sendPushNotification } = require('./services/notifications');
+const crons = require('./services/crons');
 
 const app = express();
 
@@ -43,6 +46,8 @@ app.use('/api/profile', profileRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/webhook/whatsapp', whatsappRouter);
 app.use('/api/invoices', invoicesRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/feedback', feedbackRouter);
 
 // Generic error handler
 app.use((err, req, res, next) => {
@@ -105,6 +110,47 @@ cron.schedule('0 18 * * *', async () => {
   } catch (err) {
     console.error('[Digest] Error:', err.message);
   }
+});
+
+// ── Week 3 crons — morning push, reminders, price, goodnight, reset ────────
+// Morning push: every 15 min, fires within each provider's typical_wake_time window
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    const r = await crons.morningPushTick();
+    if (r && r.pushed) console.log('[Morning]', r);
+  } catch (e) { console.error('[Morning] error:', e.message); }
+});
+
+// Pre-job reminders: every 5 min — looks 55-65 min ahead
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    const r = await crons.preJobReminderTick();
+    if (r && r.sent) console.log('[PreJob]', r);
+  } catch (e) { console.error('[PreJob] error:', e.message); }
+});
+
+// Post-job price capture: every 15 min — looks 1-6h back
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    const r = await crons.postJobPriceTick();
+    if (r && r.sent) console.log('[PostJob]', r);
+  } catch (e) { console.error('[PostJob] error:', e.message); }
+});
+
+// Goodnight / end-of-day: 18:00 UTC (mirrors legacy digest)
+cron.schedule('0 18 * * *', async () => {
+  try {
+    const r = await crons.goodnightTick();
+    console.log('[Goodnight]', r);
+  } catch (e) { console.error('[Goodnight] error:', e.message); }
+});
+
+// Daily proactive counter reset: every 15 min (TZ-aware, idempotent)
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    const r = await crons.dailyResetTick();
+    if (r && r.reset) console.log('[Reset]', r);
+  } catch (e) { console.error('[Reset] error:', e.message); }
 });
 
 const PORT = process.env.PORT || 3000;
