@@ -542,6 +542,10 @@ router.post('/:id/photo', auth, photoUpload.single('photo'), async (req, res, ne
 
     res.json({ photo: rows[0] });
   } catch (err) {
+    if (err.name === 'PhotoUploadUnavailableError') {
+      return res.status(503).json({ error: 'photo_upload_unavailable',
+        message: 'Photo upload is not configured on the server. Please try again later.' });
+    }
     next(err);
   } finally {
     fs.unlink(filePath, () => {});
