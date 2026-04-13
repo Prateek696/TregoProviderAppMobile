@@ -8,7 +8,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { showPersistentNotification, hidePersistentNotification, onRecordVoiceTap, onRecordTextTap } from '../services/notificationBar';
-import { DeviceEventEmitter, View, AppState } from 'react-native';
+import { DeviceEventEmitter, View, AppState, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VoiceBubble from '../components/VoiceBubble';
 import { useTranslation } from 'react-i18next';
 import { jsonStorage, STORAGE_KEYS } from '../shared/storage';
@@ -73,6 +74,12 @@ function JobsStack() {
  */
 function TabNavigator() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  // Dynamic inset: gesture nav (~0-15dp), 3-button nav (~24-48dp), iOS home-indicator (~34dp).
+  // Floor of 12 guarantees label descenders (g, p, y) never clip on devices with 0 insets.
+  const bottomInset = Math.max(insets.bottom, 12);
+  // Tab content area = 64dp (icon 24 + gap 4 + label ~16 + top 8 + buffer 12)
+  const CONTENT_H = 64;
   return (
     <View style={{ flex: 1 }}>
     <Tab.Navigator
@@ -82,16 +89,19 @@ function TabNavigator() {
         tabBarActiveTintColor: '#3b82f6', // Web version blue #3b82f6
         tabBarInactiveTintColor: '#94a3b8', // Slate 400 for Dark Mode
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '500',
+          marginBottom: 2,
         },
+        tabBarIconStyle: { marginTop: 2 },
         tabBarStyle: {
           borderTopWidth: 1,
           borderTopColor: '#334155', // Slate 700
           backgroundColor: '#1e293b', // Slate 800
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+          // Total height = content budget + system nav inset
+          height: CONTENT_H + bottomInset,
+          paddingBottom: bottomInset,
+          paddingTop: 6,
         },
       }}>
       <Tab.Screen
@@ -104,7 +114,7 @@ function TabNavigator() {
               name="clipboard-text"
               size={size || 24}
               color={color}
-              style={{ marginTop: 4 }}
+              style={{ marginTop: 0 }}
             />
           ),
         }}
@@ -119,7 +129,7 @@ function TabNavigator() {
               name="account-group"
               size={size || 24}
               color={color}
-              style={{ marginTop: 4 }}
+              style={{ marginTop: 0 }}
             />
           ),
         }}
@@ -134,7 +144,7 @@ function TabNavigator() {
               name="calendar"
               size={size || 24}
               color={color}
-              style={{ marginTop: 4 }}
+              style={{ marginTop: 0 }}
             />
           ),
         }}
@@ -149,7 +159,7 @@ function TabNavigator() {
               name="wallet"
               size={size || 24}
               color={color}
-              style={{ marginTop: 4 }}
+              style={{ marginTop: 0 }}
             />
           ),
         }}
@@ -164,7 +174,7 @@ function TabNavigator() {
               name="account-circle"
               size={size || 24}
               color={color}
-              style={{ marginTop: 4 }}
+              style={{ marginTop: 0 }}
             />
           ),
         }}

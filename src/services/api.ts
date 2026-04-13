@@ -183,6 +183,46 @@ export const contactsAPI = {
   }>) => client.post<{ imported: number; skipped: number; total: number }>('/contacts/sync', { contacts }),
 };
 
+// ─── Feedback ─────────────────────────────────────────────────────────────────
+export const feedbackAPI = {
+  /** thumbs_down on a job card / notification */
+  thumbsDown: (relatedJobId?: string, notes?: string) => {
+    const form = new FormData();
+    form.append('type', 'thumbs_down');
+    if (relatedJobId) form.append('related_job_id', relatedJobId);
+    if (notes) form.append('notes', notes);
+    return client.post<{ feedback: any }>('/feedback', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** free-text suggestion/bug */
+  text: (type: 'suggestion' | 'bug' | 'text', notes: string, relatedJobId?: string) => {
+    const form = new FormData();
+    form.append('type', type);
+    form.append('notes', notes);
+    if (relatedJobId) form.append('related_job_id', relatedJobId);
+    return client.post<{ feedback: any }>('/feedback', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** voice note feedback — upload audio file for transcription */
+  voice: (audioPath: string, relatedJobId?: string) => {
+    const form = new FormData();
+    form.append('type', 'voice_note');
+    form.append('audio', {
+      uri: audioPath, type: 'audio/m4a', name: 'feedback.m4a',
+    } as any);
+    if (relatedJobId) form.append('related_job_id', relatedJobId);
+    return client.post<{ feedback: any }>('/feedback', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  mine: () => client.get<{ items: any[] }>('/feedback/mine'),
+};
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 export function getAPIError(err: unknown): string {
   if (axios.isAxiosError(err)) {

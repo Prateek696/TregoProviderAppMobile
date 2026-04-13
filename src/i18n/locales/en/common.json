@@ -626,6 +626,12 @@
     "mockClient4": "The air conditioning is working great now. Thanks!",
     "mockClient5": "The networking setup looks perfect! Payment sent. Looking forward to our next project."
   },
+  "feedback": {
+    "title": "Feedback",
+    "promptHint": "What went wrong? (optional)",
+    "quickSendConfirm": "Send quick feedback on this job?",
+    "sent": "Thanks! Noted."
+  },
   "addJob": {
     "houseCleaning": "House Cleaning",
     "deepCleaning": "Deep Cleaning",

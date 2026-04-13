@@ -626,6 +626,12 @@
     "mockClient4": "O ar condicionado está a funcionar perfeitamente. Obrigado!",
     "mockClient5": "A configuração da rede ficou perfeita! Pagamento enviado. À espera do próximo projeto."
   },
+  "feedback": {
+    "title": "Feedback",
+    "promptHint": "O que correu mal? (opcional)",
+    "quickSendConfirm": "Enviar feedback rápido sobre este trabalho?",
+    "sent": "Obrigado! Anotado."
+  },
   "addJob": {
     "houseCleaning": "Limpeza de Casa",
     "deepCleaning": "Limpeza Profunda",

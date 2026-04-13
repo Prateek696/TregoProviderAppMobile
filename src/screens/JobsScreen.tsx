@@ -31,6 +31,7 @@ import { onForegroundMessage } from '../services/notifications';
 import { Modal, Alert, Linking, PermissionsAndroid } from 'react-native';
 import { JobsScreenSkeleton } from '../components/ui/Skeleton';
 import LanguageToggle from '../components/LanguageToggle';
+import FeedbackButton from '../components/FeedbackButton';
 import { useTranslation } from 'react-i18next';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
@@ -493,6 +494,7 @@ export default function JobsScreen() {
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={styles.standardTimeText}>{job.scheduledTime}</Text>
+            <FeedbackButton jobId={job.id} />
             <TouchableOpacity
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               onPress={() =>

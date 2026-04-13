@@ -418,15 +418,19 @@ export default function ContactsScreen() {
           {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} pulse={pulse} />)}
         </View>
       ) : filtered.length === 0 ? (
-        <View style={styles.center}>
-          <Icon name="account-group-outline" size={52} color={D.textMuted} />
-          <Text style={styles.emptyTitle}>{search ? t('common.noData') : t('clients.noClients')}</Text>
-          <Text style={styles.emptyDesc}>
-            {search
-              ? t('clients.tryDifferentSearch')
-              : t('clients.allowImportPrompt')}
-          </Text>
-        </View>
+        // When the permission prompt is already on-screen, don't also render the
+        // empty state — it would overlap the tab/system nav bar on short devices.
+        showPrompt ? null : (
+          <View style={styles.center}>
+            <Icon name="account-group-outline" size={52} color={D.textMuted} />
+            <Text style={styles.emptyTitle}>{search ? t('common.noData') : t('clients.noClients')}</Text>
+            <Text style={styles.emptyDesc}>
+              {search
+                ? t('clients.tryDifferentSearch')
+                : t('clients.allowImportPrompt')}
+            </Text>
+          </View>
+        )
       ) : (
         <FlatList
           data={filtered}
@@ -636,8 +640,8 @@ const styles = StyleSheet.create({
   nif: { fontSize: 11, color: D.textMuted },
   separator: { height: 1, backgroundColor: D.border, marginLeft: 74 },
 
-  // Empty state
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
+  // Empty state — top-anchored + tab-bar-safe padding so it never clips the footer
+  center: { alignItems: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 48, paddingBottom: 100 },
   emptyTitle: { fontSize: 17, fontWeight: '700', color: D.text },
   emptyDesc: { fontSize: 14, color: D.textMuted, textAlign: 'center', lineHeight: 22 },
 });
