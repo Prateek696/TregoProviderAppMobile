@@ -13,6 +13,7 @@ import {
   Alert,
   Platform,
   PermissionsAndroid,
+  Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
@@ -108,13 +109,19 @@ export default function JobDetailScreen() {
   const { jobId, pendingAccept } = (route.params as { jobId: string; pendingAccept?: boolean }) || {};
 
   const [job, setJob]             = useState<Job | null>(null);
-  const [photos, setPhotos]       = useState<Array<{ uri: string; phase: string }>>([]);
+  const [photos, setPhotos]       = useState<Array<{ uri: string; phase: string; latitude?: number | null; longitude?: number | null; captured_at?: string | null }>>([]);
   const [showPauseModal, setShowPauseModal]     = useState(false);
   const [showCancelModal, setShowCancelModal]   = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showPhotoGallery, setShowPhotoGallery] = useState(false);
   const [uploadingPhoto, setUploadingPhoto]     = useState(false);
-  const [viewingPhoto, setViewingPhoto]         = useState<string | null>(null);
+  const [viewingPhoto, setViewingPhoto]         = useState<null | {
+    uri: string;
+    phase: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    captured_at?: string | null;
+  }>(null);
 
   // Accept flow state
   const [showAcceptModal, setShowAcceptModal]   = useState(false);
@@ -146,7 +153,13 @@ export default function JobDetailScreen() {
     } catch (e) { console.error('loadJob:', e); }
     try {
       const photosRes = await jobsAPI.getPhotos(jobId);
-      setPhotos(photosRes.data.photos.map((p: any) => ({ uri: p.photo_url, phase: p.phase || 'during' })));
+      setPhotos(photosRes.data.photos.map((p: any) => ({
+        uri: p.photo_url,
+        phase: p.phase || 'during',
+        latitude: p.latitude ?? null,
+        longitude: p.longitude ?? null,
+        captured_at: p.captured_at ?? null,
+      })));
     } catch (e) { console.warn('loadPhotos:', e); }
   };
 
@@ -417,7 +430,7 @@ export default function JobDetailScreen() {
             {photos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
                 {photos.map((p, i) => (
-                  <TouchableOpacity key={i} style={s.photoThumb} onPress={() => setViewingPhoto(p.uri)}>
+                  <TouchableOpacity key={i} style={s.photoThumb} onPress={() => setViewingPhoto(p)}>
                     <Image source={{ uri: p.uri }} style={s.photoThumbImg} resizeMode="cover" />
                     <View style={[s.phasePill,
                       p.phase === 'before' ? { backgroundColor: C.red + 'cc' } :
@@ -473,7 +486,41 @@ export default function JobDetailScreen() {
           <TouchableOpacity style={s.photoViewerClose} onPress={() => setViewingPhoto(null)}>
             <Icon name="close" size={26} color="#fff" />
           </TouchableOpacity>
-          {viewingPhoto && <Image source={{ uri: viewingPhoto }} style={{ width, height: height * 0.82 }} resizeMode="contain" />}
+          {viewingPhoto && (
+            <>
+              <Image source={{ uri: viewingPhoto.uri }} style={{ width, height: height * 0.70 }} resizeMode="contain" />
+              <View style={s.photoMetaBar}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <View style={[s.phaseBadge,
+                    viewingPhoto.phase === 'before' ? s.phaseBefore :
+                    viewingPhoto.phase === 'after'  ? s.phaseAfter  : s.phaseDuring]}>
+                    <Text style={s.phaseBadgeText}>{viewingPhoto.phase.toUpperCase()}</Text>
+                  </View>
+                  {viewingPhoto.captured_at && (
+                    <Text style={s.photoMetaText}>
+                      {new Date(viewingPhoto.captured_at).toLocaleString()}
+                    </Text>
+                  )}
+                </View>
+                {viewingPhoto.latitude != null && viewingPhoto.longitude != null ? (
+                  <TouchableOpacity
+                    style={s.photoMapBtn}
+                    onPress={() => {
+                      const url = `https://maps.google.com/?q=${viewingPhoto.latitude},${viewingPhoto.longitude}`;
+                      Linking.openURL(url).catch(() => {});
+                    }}>
+                    <Icon name="map-marker" size={16} color="#3b82f6" />
+                    <Text style={s.photoMapBtnText}>
+                      {viewingPhoto.latitude!.toFixed(5)}, {viewingPhoto.longitude!.toFixed(5)}
+                    </Text>
+                    <Icon name="open-in-new" size={14} color="#3b82f6" />
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={[s.photoMetaText, { fontStyle: 'italic' }]}>No GPS data</Text>
+                )}
+              </View>
+            </>
+          )}
         </View>
       </Modal>
 
@@ -1175,4 +1222,35 @@ const s = StyleSheet.create({
     borderRadius: 20,
     padding: 8,
   },
+  photoMetaBar: {
+    position: 'absolute',
+    bottom: 32,
+    left: 16,
+    right: 16,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    gap: 10,
+  },
+  photoMetaText: { fontSize: 12, color: '#cbd5e1' },
+  phaseBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  phaseBefore:  { backgroundColor: '#1e40af' },
+  phaseDuring:  { backgroundColor: '#7c2d12' },
+  phaseAfter:   { backgroundColor: '#166534' },
+  phaseBadgeText: { fontSize: 10, color: '#fff', fontWeight: '700', letterSpacing: 0.5 },
+  photoMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  photoMapBtnText: { fontSize: 13, color: '#3b82f6', fontWeight: '600' },
 });
